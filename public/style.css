@@ -434,7 +434,10 @@
 .bg-video {
     display: block;
     position: absolute;
-    inset: 0;
+    padding: 0;
+    margin: 0;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -453,10 +456,9 @@
 
 .hero-video-feature {
     position: absolute;
-    inset: clamp(16px, 2.5vw, 32px);
+    inset: 0;
     z-index: 0;
     overflow: hidden;
-    border-radius: clamp(16px, 2vw, 28px);
 }
 
 .hero-video-feature::after {
@@ -841,8 +843,7 @@
     }
 
     .hero-video-feature {
-        inset: 12px;
-        border-radius: 16px;
+        inset: 0;
     }
 
     .hero-video-caption {
