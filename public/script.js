@@ -43,10 +43,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (header) {
+        const hero = document.querySelector('.hero-section');
         const updateHeaderShadow = () => {
-            header.style.boxShadow = window.scrollY > 50
-                ? '0 2px 10px rgba(0,0,0,0.1)'
-                : 'none';
+            if (header.classList.contains('navbar--hero') && hero) {
+                const isOverHero = window.scrollY < hero.offsetTop + hero.offsetHeight - header.offsetHeight;
+                header.classList.toggle('navbar--solid', !isOverHero);
+                header.style.boxShadow = isOverHero ? 'none' : '0 2px 10px rgba(0,0,0,0.1)';
+                return;
+            }
+
+            header.style.boxShadow = window.scrollY > 50 ? '0 2px 10px rgba(0,0,0,0.1)' : 'none';
         };
 
         updateHeaderShadow();

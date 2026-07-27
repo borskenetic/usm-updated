@@ -26,6 +26,41 @@
     margin: 0;
 }
 
+/* Landing page: let the video carry the header until the hero has scrolled away. */
+.navbar--hero {
+    position: fixed;
+    right: 0;
+    left: 0;
+    background-color: transparent;
+    transition: background-color 220ms ease, box-shadow 220ms ease;
+}
+
+.navbar--hero:not(.navbar--solid) .university-name,
+.navbar--hero:not(.navbar--solid) .nav-links a {
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.navbar--hero:not(.navbar--solid) .nav-links a:hover {
+    color: #fff4ad;
+}
+
+.navbar--hero:not(.navbar--solid) .nav-menu-toggle {
+    border-color: #fff;
+}
+
+.navbar--hero:not(.navbar--solid) .nav-menu-toggle-bar {
+    background: #fff;
+}
+
+.navbar--hero:not(.navbar--solid) .nav-links.is-open {
+    background: rgba(0, 45, 20, 0.9);
+}
+
+.navbar--hero.navbar--solid {
+    background-color: var(--primary-yellow);
+}
+
 .navbar-content {
     /* Set max width to mimic typical web layouts */
     max-width: 1200px; 
@@ -444,6 +479,80 @@
     object-position: center center;
 }
 
+/* Standalone video banner below the hero. */
+.zendy-banner {
+    position: relative;
+    width: 950px;
+    height: 550px;
+    margin: 0 auto 42px;
+    overflow: hidden;
+    background: #052c17;
+    border-radius: 16px;
+    box-shadow: 0 16px 36px rgba(0, 55, 24, 0.16);
+}
+
+.zendy-banner .bg-video {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: 950px;
+    height: 550px;
+    padding: 0;
+    margin: 0;
+    object-fit: cover;
+    object-position: center;
+}
+
+@media (max-width: 1240px) {
+    .zendy-banner {
+        width: 960px;
+        height: 360px;
+    }
+
+    .zendy-banner .bg-video {
+        width: 960px;
+        height: 360px;
+    }
+}
+
+@media (max-width: 1000px) {
+    .zendy-banner {
+        width: 720px;
+        height: 300px;
+    }
+
+    .zendy-banner .bg-video {
+        width: 720px;
+        height: 300px;
+    }
+}
+
+@media (max-width: 760px) {
+    .zendy-banner {
+        width: 520px;
+        height: 260px;
+    }
+
+    .zendy-banner .bg-video {
+        width: 520px;
+        height: 260px;
+    }
+}
+
+@media (max-width: 560px) {
+    .zendy-banner {
+        width: 280px;
+        height: 220px;
+    }
+
+    .zendy-banner .bg-video {
+        width: 280px;
+        height: 220px;
+    }
+}
+
 
 .hero-section::before {
     content: "";
@@ -504,12 +613,21 @@
     position: relative;
     z-index: 2;
     min-width: 0;
-    width: 100%;
+    width: 1000px;
     height: auto;
-    display: flex;
+    display: flex;  
     justify-content: center;
     align-items: center;
     color: white;
+    text-align: center;
+}
+
+.hero-search-feature,
+.hero-search-feature .home-search-react-root {
+    justify-content: flex-start;
+}
+
+.hero-search-feature {
     text-align: center;
 }
 

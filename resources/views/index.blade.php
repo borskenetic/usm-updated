@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <header class="navbar">
+    <header class="navbar navbar--hero">
         <div class="navbar-content">
             <div class="logo-section">
                 <img src="{{ asset('img/usm_logo_1954.png') }}" alt="University Logo" class="logo">
@@ -42,7 +42,7 @@
     <main class="hero-section">
         <section class="hero-video-feature" aria-label="USM Library video">
             <video autoplay muted loop playsinline class="bg-video">
-                <source src="{{ asset('videos/library-bg.mp4') }}" type="video/mp4">
+                <source src="{{ asset('videos/hbanner.mp4') }}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </section>
@@ -59,6 +59,12 @@
 
 
     <section class="image-gallery-section">
+
+        <div class="zendy-banner">
+            <video autoplay muted loop playsinline class="bg-video">
+                <source src="{{ asset('videos/library-bg.mp4') }}" type="video/mp4">
+            </video>
+        </div>
 
 
         <div class="gallery-header">
