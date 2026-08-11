@@ -14,8 +14,14 @@ trait ComposesLibraryIdCard
 {
     protected function idCardTemplate(string $side)
     {
-        $path = PublicAssetPath::resolve("images/id_templates/{$side}.png")
-            ?? base_path("images/id_templates/{$side}.png");
+        // Only the active USM blanks — never Area 51 / legacy paths.
+        $side = $side === 'back' ? 'back' : 'front';
+        $relative = "images/id_templates/{$side}.png";
+        $path = public_path($relative);
+
+        if (! is_file($path)) {
+            abort(500, "USM ID template missing: public/{$relative}");
+        }
 
         return Image::make($path);
     }
