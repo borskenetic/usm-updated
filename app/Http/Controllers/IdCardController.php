@@ -17,7 +17,11 @@ class IdCardController extends Controller
 
         $this->composeIdCardFront($img, [
             'photo' => $student->profile_picture,
-            'full_name' => trim("{$student->firstname} {$student->lastname}"),
+            'full_name' => $this->formatIdCardName(
+                $student->firstname,
+                $student->lastname,
+                $student->middle_initial
+            ),
             'subtitle' => $student->course,
             'id_number' => $student->id_number,
         ]);
@@ -31,12 +35,13 @@ class IdCardController extends Controller
         $img = $this->idCardTemplate('back');
 
         $this->composeIdCardBack($img, [
-            'qrcode' => $student->qrcode,
+            'qrcode' => $student->qrcode ?: $student->id_number ?: ('S-'.$student->id),
             'signature' => $student->student_signature,
             'emergency_person' => $student->emergency_person,
-            'emergency_relationship' => $student->emergency_relationship,
+            'emergency_address' => $student->emergency_address ?: $student->address,
             'emergency_number' => $student->emergency_number,
             'birth_date' => $student->birthday,
+            'valid_until' => config('idcard.valid_until'),
         ]);
 
         return $img->response('png');

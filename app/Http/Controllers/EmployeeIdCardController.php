@@ -25,7 +25,11 @@ class EmployeeIdCardController extends Controller
 
         $this->composeIdCardFront($img, [
             'photo' => $employee->formal_picture,
-            'full_name' => trim("{$employee->firstname} {$employee->lastname}"),
+            'full_name' => $this->formatIdCardName(
+                $employee->firstname,
+                $employee->lastname,
+                $employee->middle_initial
+            ),
             'subtitle' => $subtitle,
             'id_number' => $employee->employee_id ?: $employee->employee_number,
         ]);
@@ -42,9 +46,10 @@ class EmployeeIdCardController extends Controller
             'qrcode' => $employee->qrcode ?: ('E-'.$employee->id),
             'signature' => $employee->employee_signature,
             'emergency_person' => $employee->emergency_contact_name,
-            'emergency_relationship' => $employee->emergency_contact_relationship,
+            'emergency_address' => $employee->emergency_address ?: $employee->address,
             'emergency_number' => $employee->emergency_contact_number,
             'birth_date' => $employee->birth_date,
+            'valid_until' => config('idcard.valid_until'),
         ]);
 
         return $img->response('png');
