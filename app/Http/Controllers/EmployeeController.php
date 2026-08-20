@@ -8,6 +8,7 @@ use App\Models\Program;
 use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
 use App\Support\MiddleInitial;
+use App\Support\PatronQrCode;
 use App\Support\PerPage;
 use App\Support\RespondsWithHydratablePartial;
 use Illuminate\Http\Request;
@@ -24,21 +25,6 @@ class EmployeeController extends Controller
         return Cache::remember('employees.program_list', 600, fn () =>
             Program::orderBy('program_name')->get()
         );
-    }
-
-    private function generateNextQrCode(): string
-    {
-        $last = Employee::whereNotNull('qrcode')
-            ->where('qrcode', 'like', 'E-%')
-            ->orderByDesc('id')
-            ->first();
-
-        $nextNumber = 1;
-        if ($last && preg_match('/E-(\d+)/', $last->qrcode, $matches)) {
-            $nextNumber = (int) $matches[1] + 1;
-        }
-
-        return 'E-'.str_pad((string) $nextNumber, 8, '0', STR_PAD_LEFT);
     }
 
     /** @return list<int> */
@@ -128,7 +114,7 @@ class EmployeeController extends Controller
             $validated['role_id'] = 2;
             $validated['department'] = $program?->program_name ?? $validated['program'];
             $validated['position'] = $validated['designation'];
-            $validated['qrcode'] = $this->generateNextQrCode();
+            $validated['qrcode'] = PatronQrCode::nextEmployee();
 
             if ($request->hasFile('formal_picture')) {
                 $file = $request->file('formal_picture');

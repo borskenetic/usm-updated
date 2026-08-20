@@ -63,6 +63,12 @@
     <details class="patron-dir__import">
         <summary>Import students from spreadsheet</summary>
         <div class="patron-dir__import-body">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <p class="mb-0 text-muted small">Download a ready-to-fill template that matches the student import format.</p>
+                <a href="{{ route('students.import-template') }}" class="patron-dir__btn patron-dir__btn--outline">
+                    Export Template
+                </a>
+            </div>
             <form action="{{ route('students.import') }}" method="POST" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2 mb-0">
                 @csrf
                 <input type="file" name="file" class="form-control form-control-sm" accept=".xlsx,.csv" required>

@@ -12,6 +12,7 @@ use App\Models\StudentEditRequest;
 use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
 use App\Support\MiddleInitial;
+use App\Support\PatronQrCode;
 use App\Support\PerPage;
 use App\Support\RespondsWithHydratablePartial;
 use Illuminate\Http\Request;
@@ -30,21 +31,6 @@ class StudentController extends Controller
         return Cache::remember('students.program_list', 600, fn () =>
             Program::orderBy('program_code')->get()
         );
-    }
-    
-    private function generateNextQrCode()
-    {
-        $lastStudent = Student::whereNotNull('qrcode')
-            ->orderByDesc('id')
-            ->first();
-
-        $nextNumber = 1;
-
-        if ($lastStudent && preg_match('/S-(\d+)/', $lastStudent->qrcode, $matches)) {
-            $nextNumber = (int) $matches[1] + 1;
-        }
-
-        return 'S-' . str_pad($nextNumber, 8, '0', STR_PAD_LEFT);
     }
     
     // Show all students
@@ -164,7 +150,7 @@ class StudentController extends Controller
             }
 
             // ✅ Generate QR ONCE
-            $validated['qrcode'] = $this->generateNextQrCode();
+            $validated['qrcode'] = PatronQrCode::nextStudent();
 
             $student = Student::create($validated);
 
@@ -352,7 +338,7 @@ class StudentController extends Controller
                 'emergency_address' => $pending->emergency_address,
                 'profile_picture' => $pending->profile_picture,
                 'student_signature' => $pending->student_signature,
-                'qrcode' => $pending->qrcode ?: $this->generateNextQrCode(),
+                'qrcode' => $pending->qrcode ?: PatronQrCode::nextStudent(),
             ]);
 
             $pending->delete();
@@ -745,6 +731,54 @@ class StudentController extends Controller
                 ]);
             }
 
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function exportTemplate()
+    {
+        $fileName = 'students_import_template.csv';
+
+        $headers = [
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename={$fileName}",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate',
+            'Expires' => '0',
+        ];
+
+        $columns = [
+            'ID Number',
+            'Last Name',
+            'First Name',
+            'Middle Initial',
+            'Birthday',
+            'QR Code',
+            'Course',
+            'Year',
+            'Mobile Number',
+            'Address',
+        ];
+
+        $sampleRow = [
+            '24-12345',
+            'Dela Cruz',
+            'Juan',
+            'P',
+            '2004-01-15',
+            'S-00000001',
+            'BSIT',
+            '1st Year',
+            '09171234567',
+            'Kabacan, Cotabato',
+        ];
+
+        $callback = function () use ($columns, $sampleRow) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $columns);
+            fputcsv($file, $sampleRow);
             fclose($file);
         };
 

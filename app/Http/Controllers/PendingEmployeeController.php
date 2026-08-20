@@ -10,6 +10,7 @@ use App\Models\Program;
 use App\Models\Role;
 use App\Services\AdminActivityLogger;
 use App\Support\MiddleInitial;
+use App\Support\PatronQrCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -112,15 +113,7 @@ class PendingEmployeeController extends Controller
         try {
             $pending = PendingEmployee::findOrFail($id);
 
-            $lastEmployee = Employee::orderByDesc('id')->first();
-            $lastQr = $lastEmployee?->qrcode;
-            $nextNumber = 1;
-
-            if ($lastQr && str_starts_with($lastQr, 'E-')) {
-                $nextNumber = (int) substr($lastQr, 2) + 1;
-            }
-
-            $newQr = 'E-'.str_pad((string) $nextNumber, 8, '0', STR_PAD_LEFT);
+            $newQr = PatronQrCode::nextEmployee();
 
             Employee::create([
                 'employee_id' => $pending->employee_id,

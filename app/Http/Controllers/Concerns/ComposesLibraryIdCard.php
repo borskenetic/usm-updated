@@ -117,22 +117,22 @@ trait ComposesLibraryIdCard
         // Yellow photo placeholder on template: x=254–527, y=52–370 (274×319)
         $photoPath = PublicAssetPath::resolve($data['photo'] ?? null);
         if ($photoPath) {
-            $profile = Image::make($photoPath)->fit(274, 319);
-            $img->insert($profile, 'top-left', 254, 52);
+            $profile = Image::make($photoPath)->fit(259, 259);
+            $img->insert($profile, 'top-left', 268, 112);
         }
 
         // Green ID number under university seal (left of photo)
         if (! empty($data['id_number'])) {
-            $this->drawIdCardText($img, trim($data['id_number']), 148, 340, 17, '#00A651', 'center', 'top', true);
+            $this->drawIdCardText($img, trim($data['id_number']), 130, 340, 35, '#00A651', 'center', 'top', true);
         }
 
         // Name + program/department in yellow lower band (above director signature)
         if (! empty($data['full_name'])) {
-            $this->drawIdCardText($img, $data['full_name'], 278, 652, 17, '#000000', 'center', 'top', true);
+            $this->drawIdCardText($img, $data['full_name'], 278, 645, 40, '#000000', 'center', 'top', true);
         }
 
         if (! empty($data['subtitle'])) {
-            $this->drawIdCardText($img, trim($data['subtitle']), 278, 682, 15, '#000000', 'center', 'top', true);
+            $this->drawIdCardText($img, trim($data['subtitle']), 278, 690, 35, '#000000', 'center', 'top', true);
         }
 
         return $img;
@@ -187,16 +187,16 @@ trait ComposesLibraryIdCard
             ->margin(0)
             ->generate($data['qrcode']);
         $qrImage = Image::make((string) $qrPng);
-        $img->insert($qrImage, 'top-left', 40, 490);
+        $img->insert($qrImage, 'top-left', 40, 475);
 
         // Signature above the right-side "Student's Signature" line (y≈638, x=245–508)
         $signaturePath = PublicAssetPath::resolve($data['signature'] ?? null);
         if ($signaturePath) {
-            $signature = Image::make($signaturePath)->resize(180, null, function ($constraint) {
+            $signature = Image::make($signaturePath)->resize(380, null, function ($constraint) {
                 $constraint->aspectRatio();
                 $constraint->upsize();
             });
-            $img->insert($signature, 'top-left', 320, 520);
+            $img->insert($signature, 'top-left', 200, 555);
         }
 
         // Below "*Valid until:*" black bar (y≈720–785)

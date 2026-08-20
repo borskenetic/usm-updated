@@ -40,7 +40,7 @@
                     <img class="opac-search-logo" src="{{ asset('images/d.png') }}" alt="Library logo">
                     <div class="opac-search-brand-text">
                         <span class="opac-search-kicker">Online Public Access Catalog</span>
-                        <span class="opac-search-title">Governor Generoso College of Arts, Sciences and Technology</span>
+                        <span class="opac-search-title">University of Southern Mindanao - Kabacan</span>
                     </div>
                 </a>
 

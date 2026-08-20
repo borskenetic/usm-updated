@@ -8,12 +8,12 @@ use App\Models\Program;
 use App\Models\PendingEmployee;
 use App\Models\Role;
 use App\Support\MiddleInitial;
+use App\Support\PatronQrCode;
 use App\Support\PerPage;
 use App\Support\RespondsWithHydratablePartial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class PendingStudentController extends Controller
 {
@@ -158,44 +158,36 @@ class PendingStudentController extends Controller
      */
     public function approve($id)
     {
-        DB::transaction(function () use ($id) {
+        try {
+            DB::transaction(function () use ($id) {
+                $newQr = PatronQrCode::nextStudent();
 
-            // Lock students table for safe QR generation
-            $lastQr = Student::lockForUpdate()
-                ->orderBy('id', 'desc')
-                ->value('qrcode');
+                $pending = PendingStudent::findOrFail($id);
 
-            $nextNumber = 1;
+                Student::create([
+                    'id_number'        => $pending->id_number,
+                    'firstname'        => $pending->firstname,
+                    'lastname'         => $pending->lastname,
+                    'middle_initial'   => $pending->middle_initial,
+                    'birthday'         => $pending->birthday,
+                    'course'           => $pending->course,
+                    'year'             => $pending->year,
+                    'mobile_number' => $pending->mobile_number,
+                    'address' => $pending->address,
+                    'emergency_person' => $pending->emergency_person,
+                    'emergency_relationship' => $pending->emergency_relationship,
+                    'emergency_number' => $pending->emergency_number,
+                    'emergency_address' => $pending->emergency_address,
+                    'profile_picture'  => $pending->profile_picture,
+                    'student_signature'=> $pending->student_signature,
+                    'qrcode'           => $newQr,
+                ]);
 
-            if ($lastQr && str_starts_with($lastQr, 'S-')) {
-                $nextNumber = intval(Str::after($lastQr, 'S-')) + 1;
-            }
-
-            $newQr = 'S-' . str_pad($nextNumber, 8, '0', STR_PAD_LEFT);
-
-            $pending = PendingStudent::findOrFail($id);
-
-            Student::create([
-                'id_number'        => $pending->id_number,
-                'firstname'        => $pending->firstname,
-                'lastname'         => $pending->lastname,
-                'middle_initial'   => $pending->middle_initial,
-                'birthday'         => $pending->birthday,
-                'course'           => $pending->course,
-                'year'             => $pending->year,
-                'mobile_number' => $pending->mobile_number,
-                'address' => $pending->address,
-                'emergency_person' => $pending->emergency_person,
-                'emergency_relationship' => $pending->emergency_relationship,
-                'emergency_number' => $pending->emergency_number,
-                'emergency_address' => $pending->emergency_address,
-                'profile_picture'  => $pending->profile_picture,
-                'student_signature'=> $pending->student_signature,
-                'qrcode'           => $newQr,
-            ]);
-
-            $pending->delete();
-        });
+                $pending->delete();
+            });
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Error: '.$e->getMessage());
+        }
 
         return back()->with('success', 'Student approved and QR generated.');
     }

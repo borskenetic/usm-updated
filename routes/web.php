@@ -218,6 +218,7 @@ Route::middleware(['auth', 'can:isAdmin'])->group(function () {
 
     // Student Management
     Route::get('/students/report', [StudentController::class, 'index'])->name('students.report');
+    Route::get('/students/import-template', [StudentController::class, 'exportTemplate'])->name('students.import-template');
     Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
     Route::get('/students/export', [StudentController::class, 'export'])->name('students.export');
     Route::resource('students', StudentController::class);
