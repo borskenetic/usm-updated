@@ -43,6 +43,13 @@
     margin: 0.15rem 0 0;
 }
 
+.patron-register__top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .patron-register__home-link {
     font-size: 0.85rem;
     font-weight: 600;

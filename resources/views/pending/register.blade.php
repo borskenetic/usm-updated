@@ -22,7 +22,10 @@
                 <p class="patron-register__brand-title">Library registration</p>
                 <p class="patron-register__brand-sub">Self-service patron sign-up</p>
             </a>
-            <a href="{{ url('/') }}" class="patron-register__home-link">← Back to home</a>
+            <div class="patron-register__top-actions">
+                <a href="{{ route('login') }}" class="patron-register__home-link">← Back to log in</a>
+                <a href="{{ url('/') }}" class="patron-register__home-link">← Back to home</a>
+            </div>
         </div>
 
         <div class="patron-register__hero">
