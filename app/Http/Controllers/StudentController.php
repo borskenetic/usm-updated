@@ -188,8 +188,13 @@ class StudentController extends Controller
 
         MiddleInitial::mergeIntoRequest($request);
 
+        $request->merge([
+            'qrcode' => trim((string) $request->input('qrcode')),
+        ]);
+
         $validated = $request->validate([
             'id_number' => 'nullable|string|unique:students,id_number,' . $id,
+            'qrcode' => 'required|string|max:255|unique:students,qrcode,' . $id,
             'lastname' => 'required|string|max:255',
             'firstname' => 'required|string|max:255',
             'middle_initial' => MiddleInitial::validationRule(),
@@ -250,7 +255,6 @@ class StudentController extends Controller
                 $validated['student_signature'] = 'images/student_signatures/' . $sigName;
             }
 
-            // ❌ DO NOT TOUCH QR HERE
             $student->update($validated);
 
             DB::commit();

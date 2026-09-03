@@ -79,10 +79,13 @@
                         <label class="form-label">QR Code</label>
                         <input type="text"
                                name="qrcode"
-                               class="form-control"
+                               class="form-control @error('qrcode') is-invalid @enderror"
                                placeholder="QR Code"
                                value="{{ old('qrcode', $student->qrcode) }}"
-                               readonly>
+                               required>
+                        @error('qrcode')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <!-- First Name -->
