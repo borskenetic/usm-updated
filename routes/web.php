@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ModuleSelectionController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UserPreferenceController;
 use App\Models\AttendanceProgram;
 use App\Models\Program;
 use Illuminate\Support\Facades\Route;
@@ -37,9 +40,15 @@ Route::post('/switch-module', [ModuleSelectionController::class, 'store'])
     ->middleware('auth')
     ->name('module.switch');
 
-Route::post('/user/preferences/theme', [\App\Http\Controllers\UserPreferenceController::class, 'store'])
+Route::post('/user/preferences/theme', [UserPreferenceController::class, 'store'])
     ->middleware('auth')
     ->name('user.preferences.theme');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/password', [PasswordController::class, 'update'])->name('password.update');
+});
 
 require __DIR__.'/library.php';
 require __DIR__.'/attendance.php';
