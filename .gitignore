@@ -6,6 +6,9 @@
 /storage/*.key
 /storage/pail
 /storage/logs/*.log
+/backups/
+/*.sql
+/*.sql.gz
 /vendor
 
 .env
