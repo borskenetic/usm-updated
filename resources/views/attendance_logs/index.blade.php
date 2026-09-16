@@ -1,119 +1,175 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
-    <link rel="stylesheet" href="{{ asset('css/patrons/directory.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/attendance_logs/page.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/layout/skeleton.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/tailwind-build.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/attendance_logs/index.css') }}">
 @endsection
 
 @section('content')
-@php
-    $queryParams = request()->query();
-    $hasFilters = request()->hasAny(['search', 'from', 'to', 'course_code', 'year_level', 'per_page']);
-@endphp
-<div class="attn-logs">
-    <header class="attn-logs__hero">
-        <div>
-            <p class="attn-logs__eyebrow">Reports · gate terminal</p>
-            <h1 class="attn-logs__title">Attendance logs</h1>
-            <p class="attn-logs__subtitle">School gate IN/OUT scans. Filter by date, program, or student, then export or open analytics.</p>
+
+    <div class="container mt-4">
+        <div class="mb-4 flex gap-3 flex-wrap">
+            <a href="{{ route('attendance_logs.reports.hub') }}" class="export-btn">
+                📈 Reports
+            </a>
+            <a href="{{ route('attendance_logs.export.pdf', request()->query()) }}" class="export-btn">
+                📄 Export PDF
+            </a>
+            
+            <a href="{{ route('attendance_logs.export.excel', request()->query()) }}" class="export-btn">
+                📊 Export Excel
+            </a>
+
+            <a href="{{ route('book.index') }}" class="export-btn">
+                Go Back
+            </a>
         </div>
-        <div class="attn-logs__hero-actions">
-            <a href="{{ route('attendance.scan') }}" class="attn-logs__btn attn-logs__btn--outline">Gate terminal</a>
-            <a href="{{ route('book.index') }}" class="attn-logs__btn attn-logs__btn--outline">← Catalog</a>
-        </div>
-    </header>
 
-    @if(session('success'))
-        <div class="alert alert-success attn-logs__alert">{{ session('success') }}</div>
-    @endif
+        <!-- ✅ Filters: fully dynamic -->
+        <div class="mb-6 no-bg p-4">
+            <form method="GET" class="flex flex-col md:flex-row flex-wrap gap-4 items-end">
+                <!-- Global Search -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                    <input type="text" name="search" value="{{ request('search') }}"
+                           placeholder="Search"
+                           class="border px-3 py-2 w-full">
+                </div>
 
-    <nav class="attn-logs__quick-actions" aria-label="Attendance log actions">
-        <a href="{{ route('attendance_logs.reports.hub') }}" class="attn-logs__quick-action attn-logs__quick-action--primary">
-            Reports &amp; analytics
-        </a>
-        <a href="{{ route('attendance_logs.export.pdf', $queryParams) }}" class="attn-logs__quick-action">
-            Export PDF
-        </a>
-        <a href="{{ route('attendance_logs.export.excel', $queryParams) }}" class="attn-logs__quick-action">
-            Export Excel
-        </a>
-    </nav>
 
-    <div class="attn-logs__filters-card">
-        <form id="attendance-logs-filter-form" method="GET" action="{{ route('attendance_logs.index') }}" class="attn-logs__filters">
-            <div class="attn-logs__field" style="flex: 2 1 200px;">
-                <label for="attn_search">Search</label>
-                <input type="text" name="search" id="attn_search" class="form-control"
-                       placeholder="Name, program, status…" value="{{ request('search') }}">
-            </div>
-            <div class="attn-logs__field">
-                <label for="attn_from">From</label>
-                <input type="date" name="from" id="attn_from" class="form-control" value="{{ request('from') }}">
-            </div>
-            <div class="attn-logs__field">
-                <label for="attn_to">To</label>
-                <input type="date" name="to" id="attn_to" class="form-control" value="{{ request('to') }}">
-            </div>
-            <div class="attn-logs__field">
-                <label for="attn_program">Program</label>
-                <select name="course_code" id="attn_program" class="form-select">
-                    <option value="">All programs</option>
-                    @foreach($courses as $course)
-                        <option value="{{ $course }}" @selected(request('course_code') == $course)>
-                            {{ $programs->firstWhere('program_code', $course)?->program_name ?? $course }}
+                <!-- Date From -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input type="date" name="from" value="{{ request('from') }}" class="border px-3 py-2 w-full">
+                </div>
+
+                <!-- Date To -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input type="date" name="to" value="{{ request('to') }}" class="border px-3 py-2 w-full">
+                </div>
+
+                <!-- Student Name Dropdown -->
+                <div hidden>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                    <select name="student_name" class="border px-3 py-2 w-full">
+                        <option value="">All Students</option>
+                        @foreach($students as $student)
+                        <option value="{{ $student->id }}" {{ request('student_name')==$student->id ? 'selected' : ''
+                            }}>
+                            {{ $student->lastname }}, {{ $student->firstname }}
                         </option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="attn-logs__field">
-                <label for="attn_year">Year level</label>
-                <select name="year_level" id="attn_year" class="form-select">
-                    <option value="">All years</option>
-                    @foreach($years as $year)
-                        <option value="{{ $year }}" @selected(request('year_level') == $year)>{{ $year }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="attn-logs__filter-actions">
-                <button type="submit" class="attn-logs__btn attn-logs__btn--primary">Apply filters</button>
-                @if($hasFilters)
-                    <a href="{{ route('attendance_logs.index') }}" class="attn-logs__btn attn-logs__btn--outline">Clear</a>
-                @endif
-            </div>
-        </form>
-    </div>
+                        @endforeach
+                    </select>
+                </div>
 
-    <div class="attn-logs__meta">
-        <span><strong>{{ number_format($logs->total()) }}</strong> scan{{ $logs->total() === 1 ? '' : 's' }} found</span>
-        @if($hasFilters)
-            <span>Filters active</span>
-        @endif
-    </div>
+                <!-- Course Code Dropdown -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+                    <select name="course_code" class="border px-3 py-2 w-full">
+                        <option value="">All Programs</option>
+                        @foreach($courses as $course)
+                        <option value="{{ $course }}" {{ request('course_code')==$course ? 'selected' : '' }}>
+                            {{ $course }}
+                        </option>
+                        @endforeach
+                    </select>
+                </div>
 
-    <div class="attn-logs__card">
-        <div id="attendance-logs-data-panel"
-             data-hydratable-panel
-             data-loading="false"
-             data-form="#attendance-logs-filter-form"
-             data-skeleton="#attendance-logs-table-skeleton"
-             data-pagination=".data-panel-pagination"
-             data-path-match="/attendance-logs">
-            @include('attendance_logs.partials.list-table', [
-                'logs' => $logs,
-                'programs' => $programs,
-            ])
+                <!-- Year Level Dropdown -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
+                    <select name="year_level" class="border px-3 py-2 w-full">
+                        <option value="">All Levels</option>
+                        <option value="First Year">First Year</option>
+                        <option value="Second Year">Second Year</option>
+                        <option value="Third Year">Third Year</option>
+                        <option value="Fourth Year">Fourth Year</option>
+                        <option value="Fifth Year">Fifth Year</option>
+
+                    </select>
+                </div>
+
+                <!-- Search Button -->
+                <div>
+                    <button type="submit" class="btn-search">
+                        🔍 Search
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ✅ Attendance Logs Table -->
+        <div class="overflow-x-auto bg-white rounded shadow">
+            <table class="w-full text-sm text-left table-auto">
+                <thead class="bg-gray-800 text-white">
+                    <tr>
+                        <th class="px-4 py-2">Last Name</th>
+                        <th class="px-4 py-2">First Name</th>
+                        <th class="px-4 py-2">Program</th>
+                        <th class="px-4 py-2">Year Level</th>
+                        <th class="px-4 py-2">Status</th>
+                        <th class="px-4 py-2">Scanned At</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @forelse($logs as $log)
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2">
+                            {{ $log->student ? $log->student->lastname : 'Unknown' }}
+                        </td>
+                        <td class="px-4 py-2">
+                            {{ $log->student ? $log->student->firstname : 'Unknown' }}
+                        </td>
+                        <td class="px-4 py-2">
+                            {{ $log->student ? $log->student->course : 'Unknown' }}
+                        </td>
+                        <td class="px-4 py-2">
+                            {{ $log->student ? $log->student->year : 'Unknown' }}
+                        </td>
+                        <td class="px-4 py-2">
+                            @php $status = strtolower(trim((string) $log->status)); @endphp
+                            @if($status === 'in')
+                                <span class="attendance-status attendance-status--in">
+                                    <span class="attendance-status__icon" aria-hidden="true"><i class="bi bi-box-arrow-in-right"></i></span>
+                                    <span>
+                                        <strong>IN</strong>
+                                        <small>Checked in</small>
+                                    </span>
+                                </span>
+                            @elseif($status === 'out')
+                                <span class="attendance-status attendance-status--out">
+                                    <span class="attendance-status__icon" aria-hidden="true"><i class="bi bi-box-arrow-right"></i></span>
+                                    <span>
+                                        <strong>OUT</strong>
+                                        <small>Checked out</small>
+                                    </span>
+                                </span>
+                            @else
+                                <span class="attendance-status attendance-status--unknown">
+                                    <span class="attendance-status__icon" aria-hidden="true"><i class="bi bi-question-circle"></i></span>
+                                    <span>
+                                        <strong>Unknown</strong>
+                                        <small>No status</small>
+                                    </span>
+                                </span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-2">{{ $log->scanned_at ?? '—' }}</td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="6" class="text-center px-4 py-6 text-gray-500">No attendance records found.</td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6">
+            {{ $logs->links() }}
         </div>
     </div>
-</div>
-
-<template id="attendance-logs-table-skeleton">
-    @include('partials.skeleton-table', [
-        'columns' => 5,
-        'rows' => 8,
-        'loadingLabel' => 'Loading attendance logs…',
-        'headers' => ['Student', 'Program', 'Year', 'Status', 'Scanned at'],
-        'skeletonFirstCol' => 'text',
-    ])
-</template>
+    
 @endsection

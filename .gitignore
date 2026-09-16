@@ -1,6 +1,6 @@
 /.phpunit.cache
 /node_modules
-/public/build
+/build
 /public/hot
 /public/storage
 /storage/*.key
@@ -36,6 +36,16 @@ desktop.ini
 
 # Legacy root images folder (use public/images/ for repo assets)
 /images/
+/Users/
+
+# Local installers and accidental command/output files
+/composer
+/composer2
+/composer-setup.php
+/default.php
+/e AppModelsBook
+/ettings-_loan_duration_days;
+/loan_duration_days
 
 # Migration archives (use database/migrations/*.php instead)
 /database/migrations/*.zip
@@ -52,11 +62,6 @@ desktop.ini
 !/public/images/edits/.gitkeep
 /public/images/formal_pictures/*
 !/public/images/formal_pictures/.gitkeep
-/public/images/user_profiles/*
-!/public/images/user_profiles/.gitkeep
-
-# Local upload scratch / imports
-/storage/app/uploads/
 
 # Duplicate copies from Windows "(1)" exports
 *(1)*
@@ -65,18 +70,3 @@ desktop.ini
 /public/videos/*.mp4
 /videos/*.mp4
 !/public/videos/.gitkeep
-
-# Per-school branding colors (copy branding.css.example → branding.css locally)
-/branding/branding.css
-/public/branding/branding.css
-
-# Local / accidental root junk (do not commit)
-/Users/
-/e AppModelsBook
-/loan_duration_days
-/ettings-_loan_duration_days;
-/composer-setup.php
-/composer
-/composer2
-/default.php
-/AGENTS.md

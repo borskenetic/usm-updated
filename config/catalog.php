@@ -31,12 +31,11 @@ return [
     /*
     | Per-copy fields when cataloging multiple copies of one title.
     */
-    'copy_unique_columns' => ['accession_no', 'rfid', 'barcode'],
+    'copy_unique_columns' => ['accession_no', 'rfid'],
 
     'copy_unique_marc' => [
         ['book_column' => 'accession_no', 'tag' => '949', 'subfield' => null, 'label' => 'Accession no.'],
         ['book_column' => 'rfid', 'tag' => '999', 'subfield' => 'r', 'label' => 'RFID'],
-        ['book_column' => 'barcode', 'tag' => '876', 'subfield' => 'p', 'label' => 'Barcode'],
     ],
 
     /*

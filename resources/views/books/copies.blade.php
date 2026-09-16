@@ -52,20 +52,7 @@
                 <td>{{ $copy->created_at?->format('Y-m-d') }}</td>
 
                 <td>
-                    @php $patronHold = $copy->activeBookReservation(); @endphp
-                    @if($copy->isReserved())
-                        <span class="text-warning fw-semibold">Room use only</span>
-                    @elseif($patronHold)
-                        <span class="opac-patron-reserved fw-semibold">Reserved</span>
-                    @elseif($copy->availability === 'On Hold')
-                        <button
-                            type="button"
-                            class="btn btn-primary btn-sm"
-                            onclick="openStudentCheckout({{ $copy->id }})">
-                            Self Check-Out
-                        </button>
-                        <span class="opac-patron-reserved fw-semibold ms-1">On hold</span>
-                    @elseif($copy->availability === 'Available')
+                    @if($copy->availability === 'Available')
                         <button
                             type="button"
                             class="btn btn-primary btn-sm"
@@ -80,19 +67,6 @@
                             data-author="{{ e($author) }}">
                             Add to Cart
                         </button>
-                        <button
-                            type="button"
-                            class="btn btn-outline-warning btn-sm btn-reserve-copy"
-                            data-copy-id="{{ $copy->id }}">
-                            Reserve
-                        </button>
-                    @elseif($copy->availability === 'Borrowed')
-                        <button
-                            type="button"
-                            class="btn btn-outline-warning btn-sm btn-reserve-copy"
-                            data-copy-id="{{ $copy->id }}">
-                            Reserve
-                        </button>
                     @else
                         <span class="text-danger">Not Available</span>
                     @endif
@@ -102,30 +76,8 @@
         </tbody>
     </table>
 
-    @include('layouts.partials.pagination_bar', ['paginator' => $copies])
+    {{ $copies->links('pagination::bootstrap-5') }}
 
-</div>
-
-<div class="modal fade" id="studentReserveModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 shadow-lg">
-            <div class="modal-header">
-                <h5 class="modal-title">Reserve copy</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="reserveCopyId" value="">
-                <label class="form-label">Student ID</label>
-                <input type="text" id="reserveStudentId" class="form-control">
-                <div id="reserveError" class="text-danger mt-2 d-none"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-warning" onclick="confirmCopyReserve()">
-                    Confirm reservation
-                </button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="modal fade" id="studentCheckoutModal" tabindex="-1">
@@ -213,81 +165,24 @@
 
 <div id="toastContainer" class="toast-container"></div>
 
-@include('partials.loan_terms_modal')
-
 <script>
     window.CHECKOUT_URL = "{{ route('checkout.process') }}";
-    window.RESERVE_URL = "{{ route('opac.reserve') }}";
     window.CSRF_TOKEN = "{{ csrf_token() }}";
-    window.LOAN_DEFAULT_DAYS = @json((int) (optional(\App\Models\FineSetting::current())->studentLoanDurationDays() ?? 7));
 </script>
-<script src="{{ asset('js/loan-terms.js') }}"></script>
 <script src="{{ asset('js/cart.js') }}"></script>
 <script src="{{ asset('js/landings.js') }}"></script>
 <script>
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('.btn-add-copy-to-cart');
-        if (btn) {
-            e.preventDefault();
-            var id = btn.getAttribute('data-copy-id');
-            var title = btn.getAttribute('data-title') || '';
-            var author = btn.getAttribute('data-author') || '';
-            if (id && typeof selectBookAndAddToCart === 'function') {
-                selectBookAndAddToCart(id, title, author);
-            }
-            return;
-        }
-
-        var reserveBtn = e.target.closest('.btn-reserve-copy');
-        if (reserveBtn) {
-            e.preventDefault();
-            document.getElementById('reserveCopyId').value = reserveBtn.getAttribute('data-copy-id') || '';
-            document.getElementById('reserveStudentId').value = '';
-            document.getElementById('reserveError').classList.add('d-none');
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('studentReserveModal')).show();
+        if (!btn) return;
+        e.preventDefault();
+        var id = btn.getAttribute('data-copy-id');
+        var title = btn.getAttribute('data-title') || '';
+        var author = btn.getAttribute('data-author') || '';
+        if (id && typeof selectBookAndAddToCart === 'function') {
+            selectBookAndAddToCart(id, title, author);
         }
     });
-
-    function confirmCopyReserve() {
-        var copyId = document.getElementById('reserveCopyId').value;
-        var studentId = document.getElementById('reserveStudentId').value.trim();
-        var err = document.getElementById('reserveError');
-
-        if (!studentId) {
-            err.textContent = 'Please enter your Student ID.';
-            err.classList.remove('d-none');
-            return;
-        }
-
-        fetch(window.RESERVE_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': window.CSRF_TOKEN,
-            },
-            body: JSON.stringify({ student_id: studentId, book_id: Number(copyId) }),
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (!data.success) {
-                    err.textContent = data.message || 'Reservation failed.';
-                    err.classList.remove('d-none');
-                    return;
-                }
-                bootstrap.Modal.getInstance(document.getElementById('studentReserveModal'))?.hide();
-                if (typeof showToast === 'function') {
-                    showToast(data.message || 'Copy reserved.', 'success');
-                } else {
-                    alert(data.message || 'Copy reserved.');
-                }
-                window.location.reload();
-            })
-            .catch(function () {
-                err.textContent = 'Server error occurred.';
-                err.classList.remove('d-none');
-            });
-    }
 </script>
 
 </body>

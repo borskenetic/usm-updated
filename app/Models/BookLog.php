@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\FineSetting;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +11,8 @@ class BookLog extends Model
 {
     use HasFactory;
 
+    protected $table = 'library_book_logs';
+
     public const CIRCULATION_CHECKOUT = 'checkout';
 
     public const CIRCULATION_ROOM_USE = 'room_use';
@@ -20,7 +20,6 @@ class BookLog extends Model
     protected $fillable = [
         'book_id',
         'student_id',
-        'employee_id',
         'patron_name',
         'status',
         'circulation_type',
@@ -59,41 +58,30 @@ class BookLog extends Model
         'total_fine',
     ];
 
+    private static ?FineSetting $cachedFineSetting = null;
+
+    public static function cachedFineSettings(): FineSetting
+    {
+        return self::$cachedFineSetting ??= FineSetting::currentOrDefault();
+    }
+
+    public static function forgetCachedFineSettings(): void
+    {
+        self::$cachedFineSetting = null;
+    }
+
     /**
      * Latest log per book is Checked Out for this student (includes room use).
      */
     public static function countActiveLoansForStudent(int $studentId): int
     {
-        $latestIds = DB::table('book_logs')
-            ->selectRaw('MAX(id) as id')
-            ->groupBy('book_id')
-            ->pluck('id');
-
-        if ($latestIds->isEmpty()) {
-            return 0;
-        }
-
-        return (int) static::query()
-            ->whereIn('id', $latestIds)
+        $latestIds = DB::table('library_book_logs')
+            ->select(DB::raw('MAX(id) as id'))
             ->where('student_id', $studentId)
-            ->where('status', 'Checked Out')
-            ->count();
-    }
-
-    public static function countActiveLoansForEmployee(int $employeeId): int
-    {
-        $latestIds = DB::table('book_logs')
-            ->selectRaw('MAX(id) as id')
-            ->groupBy('book_id')
-            ->pluck('id');
-
-        if ($latestIds->isEmpty()) {
-            return 0;
-        }
+            ->groupBy('book_id');
 
         return (int) static::query()
             ->whereIn('id', $latestIds)
-            ->where('employee_id', $employeeId)
             ->where('status', 'Checked Out')
             ->count();
     }
@@ -106,11 +94,6 @@ class BookLog extends Model
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_id');
-    }
-
-    public function employee()
-    {
-        return $this->belongsTo(Employee::class, 'employee_id');
     }
 
     public function clearedBy()
@@ -166,18 +149,6 @@ class BookLog extends Model
             }
         }
 
-        if ($this->employee_id) {
-            $this->loadMissing('employee');
-            if ($this->employee) {
-                $name = "{$this->employee->lastname}, {$this->employee->firstname}";
-                if ($this->employee->middle_initial) {
-                    $name .= ' '.$this->employee->middle_initial.'.';
-                }
-
-                return $name;
-            }
-        }
-
         return $this->patron_name ?? '—';
     }
 
@@ -203,20 +174,19 @@ class BookLog extends Model
 
     public function getDaysOverdueAttribute()
     {
-        $settings = FineSetting::latest('effective_from')->first();
-
-        if (! $this->due_date || ! $settings) {
+        if (! $this->due_date) {
             return 0;
         }
 
-        $patronTerms = $settings->patronTerms((bool) $this->employee_id);
+        $settings = self::cachedFineSettings();
+        $terms = $settings->patronTerms($this->employee_id !== null);
 
         $compareDate = $this->returned_date
             ? Carbon::parse($this->returned_date)
             : Carbon::now('Asia/Manila');
 
         $graceEnd = Carbon::parse($this->due_date)
-            ->addDays($patronTerms->grace_period_days);
+            ->addDays($terms->grace_period_days);
 
         if ($compareDate->lte($graceEnd)) {
             return 0;
@@ -239,17 +209,17 @@ class BookLog extends Model
             return (float) $this->fine_incurred;
         }
 
-        $settings = FineSetting::latest('effective_from')->first();
-
-        if (! $settings || $this->days_overdue === 0) {
+        if ($this->days_overdue === 0) {
             return 0;
         }
 
-        $patronTerms = $settings->patronTerms((bool) $this->employee_id);
-        $fine = $this->days_overdue * $patronTerms->fine_per_day;
+        $settings = self::cachedFineSettings();
+        $terms = $settings->patronTerms($this->employee_id !== null);
 
-        if (! is_null($patronTerms->max_fine)) {
-            $fine = min($fine, $patronTerms->max_fine);
+        $fine = $this->days_overdue * $terms->fine_per_day;
+
+        if (! is_null($terms->max_fine)) {
+            $fine = min($fine, $terms->max_fine);
         }
 
         return round($fine, 2);

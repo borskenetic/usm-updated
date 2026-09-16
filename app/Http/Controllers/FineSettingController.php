@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 
 class FineSettingController extends Controller
 {
-    public function edit()
+    public function edit(): RedirectResponse
     {
         return redirect()->route('circulation.policy.edit');
     }
 
-    public function update(Request $request)
+    public function update(): RedirectResponse
     {
         return redirect()->route('circulation.policy.edit');
     }

@@ -3,7 +3,6 @@
 namespace App\Imports;
 
 use App\Models\Student;
-use App\Support\MiddleInitial;
 use Maatwebsite\Excel\Concerns\ToModel;
 
 class StudentsImport implements ToModel
@@ -14,7 +13,7 @@ class StudentsImport implements ToModel
             'id_number' => $row[0] ?? null,
             'lastname' => $row[1] ?? '',
             'firstname' => $row[2] ?? '',
-            'middle_initial' => MiddleInitial::normalize($row[3] ?? null),
+            'middle_initial' => $row[3] ?? null,
             'birthday' => $row[4] ?? null,
             'qrcode' => $row[5] ?? null,
             'course' => $row[6] ?? null,

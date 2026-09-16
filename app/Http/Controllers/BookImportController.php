@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Book;
-use App\Models\AdminActivity;
 use App\Models\Program;
-use App\Services\AdminActivityLogger;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -106,8 +104,6 @@ class BookImportController extends Controller
             fclose($handle);
         }
 
-        AdminActivityLogger::catalogBulk('Books imported', 'CSV import completed', route('book.index'));
-
         return redirect()->back()->with('success', 'CSV file imported successfully!');
     }
 
@@ -180,8 +176,6 @@ class BookImportController extends Controller
                 $book->programs()->attach($programIds);
             }
         }
-
-        AdminActivityLogger::catalogBulk('Books imported', 'Excel import completed', route('book.index'));
 
         return redirect()->back()->with('success', 'Excel file imported successfully!');
     }

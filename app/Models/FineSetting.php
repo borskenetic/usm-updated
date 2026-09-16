@@ -1,12 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class FineSetting extends Model
 {
     public const DEFAULT_LOAN_DURATION_DAYS = 7;
+
+    protected $table = 'library_fine_settings';
 
     protected $fillable = [
         'fine_per_day',
@@ -26,7 +31,44 @@ class FineSetting extends Model
 
     public static function current(): ?self
     {
-        return self::orderByDesc('effective_from')->first();
+        return Cache::remember('fine-setting:current', now()->addMinutes(30), function () {
+            return self::orderByDesc('effective_from')->first();
+        });
+    }
+
+    public static function clearCache(): void
+    {
+        Cache::forget('fine-setting:current');
+    }
+
+    public static function currentOrDefault(): self
+    {
+        return self::current() ?? new self(self::defaultAttributes());
+    }
+
+    /** @return array<string, mixed> */
+    public static function defaultAttributes(): array
+    {
+        $finePerDay = (float) config('circulation.fine_per_day', 5.00);
+        $maxFine = config('circulation.max_fine', 500.00);
+        $grace = (int) config('circulation.grace_period_days', 0);
+        $loanDays = (int) config('circulation.loan_duration_days', self::DEFAULT_LOAN_DURATION_DAYS);
+
+        return [
+            'fine_per_day' => $finePerDay,
+            'max_fine' => $maxFine,
+            'grace_period_days' => $grace,
+            'loan_duration_days' => $loanDays,
+            'student_fine_per_day' => $finePerDay,
+            'student_max_fine' => $maxFine,
+            'student_grace_period_days' => $grace,
+            'student_loan_duration_days' => $loanDays,
+            'employee_fine_per_day' => $finePerDay,
+            'employee_max_fine' => $maxFine,
+            'employee_grace_period_days' => $grace,
+            'employee_loan_duration_days' => $loanDays,
+            'effective_from' => now()->toDateString(),
+        ];
     }
 
     /**

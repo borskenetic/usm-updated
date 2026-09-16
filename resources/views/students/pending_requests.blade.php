@@ -1,4 +1,40 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
+
+@section('styles')
+    <link rel="stylesheet" href="{{ asset('css/students/students.css') }}?v={{ filemtime(public_path('css/students/students.css')) }}">
+    <style>
+        .nav-tabs .nav-link.active {
+            color: #1b5e20;
+            border-color: #e2e8f0 #e2e8f0 #fff;
+            font-weight: 700;
+        }
+        .nav-tabs .nav-link {
+            color: #5b6b7c;
+            font-weight: 650;
+        }
+        .nav-tabs .nav-link:hover {
+            color: #1b5e20;
+            border-color: #e8f5e9 #e8f5e9 #e2e8f0;
+        }
+        .btn-info {
+            --bs-btn-bg: #e8f5e9;
+            --bs-btn-border-color: rgba(27, 94, 32, 0.2);
+            --bs-btn-color: #1b5e20;
+            --bs-btn-hover-bg: #1b5e20;
+            --bs-btn-hover-border-color: #1b5e20;
+            --bs-btn-hover-color: #fff;
+            background-color: #e8f5e9;
+            border-color: rgba(27, 94, 32, 0.2);
+            color: #1b5e20;
+        }
+        .btn-info:hover,
+        .btn-info:focus {
+            background-color: #1b5e20 !important;
+            border-color: #1b5e20 !important;
+            color: #fff !important;
+        }
+    </style>
+@endsection
 
 @section('content')
 <div class="container">
@@ -17,13 +53,13 @@
         <!-- Pending Requests -->
         <div class="tab-pane fade show active" id="pending" role="tabpanel">
             @include('students.partials.requests_table', ['requests' => $pending, 'showActions' => true])
-            @include('layouts.partials.pagination_bar', ['paginator' => $pending])
+            {{ $pending->links() }} 
         </div>
 
         <!-- Logs -->
         <div class="tab-pane fade" id="logs" role="tabpanel">
             @include('students.partials.requests_table', ['requests' => $logs, 'showActions' => false])
-            @include('layouts.partials.pagination_bar', ['paginator' => $logs])
+            {{ $logs->links() }}
         </div>
     </div>
 </div>
@@ -40,7 +76,7 @@
       <div class="modal-body">
         <p><strong>Name:</strong> {{ $req->lastname }}, {{ $req->firstname }} {{ $req->middle_initial }}</p>
         <p><strong>Birthday:</strong> {{ $req->birthday ?? '-' }}</p>
-        <p><strong>Program:</strong> {{ $req->program_id ?? '-'}}</p>
+        <p><strong>Program:</strong> {{ $req->course ?? '-'}}</p>
         <p><strong>Year:</strong> {{ $req->year ?? '-' }}</p>
         <p><strong>Mobile:</strong> {{ $req->mobile_number ?? '-' }}</p>
         <p><strong>Address:</strong> {{ $req->address ?? '-' }}</p>

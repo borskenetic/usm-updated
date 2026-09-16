@@ -2,22 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceProgram;
+use App\Models\Program;
+use App\Services\Auth\ModuleAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly ModuleAccessService $moduleAccess) {}
+
     public function showLogin()
     {
         if (auth()->check()) {
-            $role = auth()->user()->role;
-            return match ($role) {
-                'admin', 'staff' => redirect()->route('book.index'),
-                'student', 'faculty' => redirect()->route('landing'),
-                default => redirect()->route('login')->with('error', 'Unauthorized role.'),
-            };
+            return redirect()->route('dashboard');
         }
-        return view('auth.login');
+
+        return view('auth.login', [
+            'attendancePrograms' => AttendanceProgram::query()->orderBy('program_name')->get(),
+            'libraryPrograms' => Program::query()->orderBy('program_name')->get(),
+            'workStartYears' => range((int) date('Y'), 1980),
+        ]);
     }
 
     public function login(Request $request)
@@ -32,16 +37,40 @@ class AuthController extends Controller
 
             $user = Auth::user();
 
-            return match ($user->role) {
-                'admin', 'staff' => redirect()->intended(route('book.index')),
-                'student', 'faculty' => redirect()->intended('landing'),
-                default => redirect()->route('login')->with('error', 'Unauthorized role.'),
-            };
+            if (! $user->is_active) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return back()
+                    ->withInput($request->only('email', 'remember'))
+                    ->with('auth_modal', 'login')
+                    ->with('error', 'This account is inactive. Please contact an administrator.');
+            }
+
+            try {
+                $module = $this->moduleAccess->defaultModule($user);
+                $request->session()->put('active_module', $module);
+
+                return redirect()->route($this->moduleAccess->dashboardRouteForModule($user, $module));
+            } catch (\InvalidArgumentException) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return back()
+                    ->withInput($request->only('email', 'remember'))
+                    ->with('auth_modal', 'login')
+                    ->with('error', 'No dashboard is available for this account.');
+            }
         }
 
-        return back()->withErrors([
-            'email' => 'Invalid credentials.',
-        ]);
+        return back()
+            ->withInput($request->only('email', 'remember'))
+            ->with('auth_modal', 'login')
+            ->withErrors([
+                'email' => 'Invalid credentials.',
+            ]);
     }
 
     public function logout(Request $request)
@@ -49,6 +78,7 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect()->route('login');
+
+        return redirect()->route('home');
     }
 }

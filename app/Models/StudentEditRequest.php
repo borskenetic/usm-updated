@@ -7,16 +7,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class StudentEditRequest extends Model
 {
+    protected $table = 'library_student_edit_requests';
+
     protected $fillable = [
         'student_id',
         'lastname',
         'firstname',
         'middle_initial',
         'birthday',
-        'program_id',
+        'course',
         'year',
         'mobile_number',
-        'email',
         'address',
         'emergency_person',
         'emergency_relationship',
@@ -37,10 +38,5 @@ class StudentEditRequest extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class, 'student_id');
-    }
-
-    public function program(): BelongsTo
-    {
-        return $this->belongsTo(Program::class, 'program_id');
     }
 }

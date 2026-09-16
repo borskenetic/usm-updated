@@ -24,12 +24,12 @@
         }
 
         .btn-save {
-            background-color: #007bff;
+            background-color: #1b5e20;
             color: white;
         }
 
         .btn-save:hover {
-            background-color: #0056b3;
+            background-color: #145218;
         }
     </style>
 </head>
@@ -48,6 +48,23 @@
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
                     {{ session('success') }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            @endif
+
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ session('error') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            @endif
+
+            @if ($errors->any())
+                <div class="alert alert-danger" role="alert">
+                    <ul class="mb-0">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
                 </div>
             @endif
 
@@ -79,13 +96,10 @@
                         <label class="form-label">QR Code</label>
                         <input type="text"
                                name="qrcode"
-                               class="form-control @error('qrcode') is-invalid @enderror"
+                               class="form-control"
                                placeholder="QR Code"
                                value="{{ old('qrcode', $student->qrcode) }}"
-                               required>
-                        @error('qrcode')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
+                               readonly>
                     </div>
 
                     <!-- First Name -->
@@ -110,18 +124,26 @@
                                required>
                     </div>
 
+                    <!-- Middle Initial -->
                     <div class="col-md-4">
                         <label class="form-label">Middle Initial</label>
-                        @include('partials.middle_initial_input', ['value' => old('middle_initial', $student->middle_initial)])
+                        <input type="text"
+                               name="middle_initial"
+                               class="form-control"
+                               placeholder="Middle Initial"
+                               value="{{ old('middle_initial', $student->middle_initial) }}">
                     </div>
 
-                    <!-- Birthday -->
+                    <!-- Birthday: HTML date inputs require yyyy-MM-dd only -->
                     <div class="col-md-6">
                         <label class="form-label">Birthday</label>
                         <input type="date"
                                name="birthday"
                                class="form-control"
-                               value="{{ old('birthday', $student->birthday) }}">
+                               value="{{ old('birthday', $student->birthday?->format('Y-m-d')) }}">
+                        @error('birthday')
+                            <div class="text-danger small mt-1">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <!-- Mobile Number -->
@@ -132,15 +154,6 @@
                                class="form-control"
                                placeholder="09XXXXXXXXX"
                                value="{{ old('mobile_number', $student->mobile_number) }}">
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Email</label>
-                        <input type="email"
-                               name="email"
-                               class="form-control"
-                               placeholder="For reservation alerts"
-                               value="{{ old('email', $student->email) }}">
                     </div>
 
                     <!-- Course -->

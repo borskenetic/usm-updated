@@ -4,9 +4,9 @@
             font-size: 1.3rem;
             font-weight: bold;
             font-family: 'Poppins', sans-serif;
-            
+
         }
-        
+
         .dropdown {
     position: relative;
     display: inline-block;
@@ -47,9 +47,9 @@
   .dropdown:hover .dropdown-content {
     display: block;
   }
-  
-  
-  
+
+
+
  .attendance_dropdown {
     position: relative;
     border: none;
@@ -99,7 +99,7 @@
     display: block;
 }
 
-  
+
   .logs_dropdown {
     position: relative;
     border: none;
@@ -148,11 +148,11 @@
 .logs_dropdown:hover .logs_dropdown-content {
     display: block;
 }
-        
-        
-        
-        
-        
+
+
+
+
+
         .btn1{
             font-weight: 600;
             font-size: 0.8rem;
@@ -164,7 +164,7 @@
             text-decoration: none;
             color: #932c27;
         }
-        
+
         .btn2{
             font-weight: 600;
             font-size: 0.8rem;
@@ -214,7 +214,7 @@
             font-size: 1.3rem;
             font-weight: bold;
             font-family: 'Poppins', sans-serif;
-            
+
         }
         .btn0{
             font-weight: 600;
@@ -230,7 +230,7 @@
         .btn0:hover{
             color: #ffd700;
         }
-        
+
         .btn1{
             font-weight: 600;
             font-size: 0.8rem;
@@ -242,7 +242,7 @@
             text-decoration: none;
             color: #ffb845;
         }
-        
+
         .btn2{
             font-weight: 600;
             font-size: 0.8rem;
@@ -285,7 +285,7 @@
         .btn4:hover{
             color: #ffb845;
         }
-        
+
         .btn5{
             margin-right: 5rem;
             background-color: #22333b;
@@ -304,7 +304,7 @@
             background-color: #ffb845;
             color: #22333b;
         }
-        
+
         footer{
             background-color: #05014a;
             width: 100%;
@@ -315,7 +315,7 @@
         .a51-footer{
             text-align: center;
         }
-       
+
         .a51-footer h1{
             font-family: 'Orbitron', sans-serif;
             font-weight: bold;
@@ -333,29 +333,77 @@
             font-style: italic;
             color: #ccc;
         }
-        
+
         .text-white.px-4.py-2.hover\:bg-yellow-400.transition.w-full {
     background-color: #932c27;
 }
 
-.in {
-    background-color: green;
-    color: white;
-    padding: 4px 10px;
-    font-weight: bold;
-    border-radius: 4px;
-    display: inline-block;
-    font-size: 0.875rem;
+.attendance-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 8.25rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 999px !important;
+    font-family: 'Poppins', sans-serif;
+    line-height: 1.1;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.out {
-    background-color: #932c27;
-    color: white;
-    padding: 4px 10px;
-    font-weight: bold;
-    border-radius: 4px;
-    display: inline-block;
-    font-size: 0.875rem;
+.attendance-status__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px !important;
+    color: #ffffff;
+    flex: 0 0 auto;
+}
+
+.attendance-status strong {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.attendance-status small {
+    display: block;
+    margin-top: 0.08rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.attendance-status--in {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #14532d;
+}
+
+.attendance-status--in .attendance-status__icon {
+    background: #16a34a;
+}
+
+.attendance-status--out {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #7f1d1d;
+}
+
+.attendance-status--out .attendance-status__icon {
+    background: #dc2626;
+}
+
+.attendance-status--unknown {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+}
+
+.attendance-status--unknown .attendance-status__icon {
+    background: #64748b;
 }
 
 #lfpyss{
@@ -364,9 +412,7 @@
 
         /*end of header*/
 
-        .legacy-page-content * {
-    border-radius: 0 !important;
-}
+
 
 .btn-search{
     background-color: var(--brand-button-bg, #22333b);
@@ -384,7 +430,7 @@
 
 /* Make Export buttons transparent and inherit text */
 a.export-btn {
-   
+
     color: black !important;
     padding: 0.5rem 1rem;
     font-weight: 600;
@@ -401,4 +447,4 @@ a.export-btn:hover {
     background: none !important;
     box-shadow: none !important;
 }
- 
+

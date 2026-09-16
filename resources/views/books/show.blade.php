@@ -1,4 +1,4 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/books/show.css') }}">
@@ -32,13 +32,8 @@
             <a href="{{ route('book.edit', $book->id) }}" class="btn btn-show-outline">Edit</a>
             @if($copyIdForCirculation)
                 @if($book->availability === 'Available')
-                    @if($book->isReserved())
-                        <a href="{{ route('logs.index', ['copy_identifier' => $copyIdForCirculation, 'status' => 'room_use']) }}"
-                           class="btn btn-show-primary">Room use</a>
-                    @else
-                        <a href="{{ route('logs.index', ['copy_identifier' => $copyIdForCirculation, 'status' => 'checked_out']) }}"
-                           class="btn btn-show-primary">Check out</a>
-                    @endif
+                    <a href="{{ route('logs.index', ['copy_identifier' => $copyIdForCirculation, 'status' => 'checked_out']) }}"
+                       class="btn btn-show-primary">Check out</a>
                 @else
                     <a href="{{ route('logs.index', [
                         'copy_identifier' => $copyIdForCirculation,
@@ -71,9 +66,6 @@
                                 <span class="book-show__badge book-show__badge--available">Available</span>
                             @else
                                 <span class="book-show__badge book-show__badge--borrowed">Borrowed</span>
-                            @endif
-                            @if($book->isReserved())
-                                <span class="book-show__badge book-show__badge--reserved ms-1">Reserved</span>
                             @endif
                         </dd>
                     </div>

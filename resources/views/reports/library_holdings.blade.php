@@ -1,5 +1,6 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
+@section('title', 'Library Holdings Report')
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/books/create.css') }}">
 @endsection

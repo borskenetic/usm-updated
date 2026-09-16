@@ -1,148 +1,235 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
+
+@section('title', 'Pending Registrations')
 
 @section('styles')
-    <link rel="stylesheet" href="{{ asset('css/patrons/directory.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/layout/skeleton.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/students/students.css') }}">
+    <style>
+        .hidden { display: none; }
+    </style>
 @endsection
 
 @section('content')
 @php
-    $studentCount = $pendingStudents->total();
-    $employeeCount = $pendingEmployees->total();
-    $activeTab = $defaultTab ?? request('tab', 'students');
+    $activeTab = $activeTab ?? 'students';
+    $pendingFaculty = $pendingFaculty ?? collect();
+    $showStudents = $activeTab === 'students';
+    $showEmployees = $activeTab === 'employees';
+    $showFaculty = $activeTab === 'faculty';
 @endphp
-<div class="patron-dir">
-    <header class="patron-dir__hero">
-        <div>
-            <p class="patron-dir__eyebrow">Patron data · review queue</p>
-            <h1 class="patron-dir__title">Pending registrations</h1>
-            <p class="patron-dir__subtitle">Approve or reject self-service sign-ups before they appear in the directory.</p>
-        </div>
-        <div class="patron-dir__hero-actions">
-            <a href="{{ $backRoute ?? route('students.index') }}" class="patron-dir__btn patron-dir__btn--outline">← Back to directory</a>
-        </div>
-    </header>
 
-    @if(session('success'))
-        <div class="alert alert-success patron-dir__alert">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-        <div class="alert alert-danger patron-dir__alert">{{ session('error') }}</div>
-    @endif
-
-    <div class="patron-dir__stats">
-        <div class="patron-dir__stat-card {{ $studentCount > 0 ? 'patron-dir__stat-card--alert' : '' }}">
-            <div class="patron-dir__stat-card__value">{{ number_format($studentCount) }}</div>
-            <div class="patron-dir__stat-card__label">Students waiting</div>
+<div class="container mt-5">
+    <div class="card">
+        <div class="card-header text-center">
+            <h4 class="mb-0">Pending Registrations</h4>
         </div>
-        <div class="patron-dir__stat-card {{ $employeeCount > 0 ? 'patron-dir__stat-card--alert' : '' }}">
-            <div class="patron-dir__stat-card__value">{{ number_format($employeeCount) }}</div>
-            <div class="patron-dir__stat-card__label">Faculty &amp; staff waiting</div>
-        </div>
-    </div>
+        <div class="card-body">
+            @if(session('success'))
+                <div class="alert alert-success">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger">{{ session('error') }}</div>
+            @endif
 
-    <div class="patron-dir__toolbar">
-        <form id="pending-filter-form" method="GET" action="{{ route('pending.index') }}" class="patron-dir__filters">
-            <input type="hidden" name="tab" id="pendingTab" value="{{ $activeTab }}">
-            <div class="patron-dir__field" style="flex: 2 1 220px;">
-                <label for="pending_search">Search</label>
-                <input type="text" name="search" id="pending_search" class="form-control"
-                       placeholder="Name, ID, program…" value="{{ $search ?? request('search') }}">
-            </div>
-            <div class="patron-dir__filter-btn">
-                <button type="submit" class="patron-dir__btn patron-dir__btn--outline">Search</button>
-            </div>
-            @if(request()->filled('search'))
-                <div class="patron-dir__filter-btn">
-                    <a href="{{ route('pending.index', ['tab' => $activeTab]) }}" class="patron-dir__btn patron-dir__btn--outline">Clear</a>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                <div class="d-flex flex-wrap gap-2">
+                    <button id="showStudents" type="button" class="btn {{ $showStudents ? 'btn-primary' : 'btn-outline-primary' }}">View Students</button>
+                    <button id="showEmployees" type="button" class="btn {{ $showEmployees ? 'btn-primary' : 'btn-outline-primary' }}">View Employees</button>
+                    <button id="showFaculty" type="button" class="btn {{ $showFaculty ? 'btn-primary' : 'btn-outline-primary' }}">Teaching Faculty</button>
                 </div>
-            @endif
-        </form>
-    </div>
+                <a href="{{ route('students.index') }}" class="btn btn-secondary">
+                    &larr; Back to Registered
+                </a>
+            </div>
 
-    <nav class="patron-dir__tabs" aria-label="Pending registration type" role="tablist">
-        <button type="button"
-                id="pending-tab-students"
-                class="patron-dir__tab {{ $activeTab === 'students' ? 'active' : '' }}"
-                role="tab"
-                aria-selected="{{ $activeTab === 'students' ? 'true' : 'false' }}"
-                aria-controls="pending-panel-students"
-                data-pending-tab="students">
-            Students
-            @if($studentCount > 0)
-                <span class="patron-dir__quick-action-count">{{ $studentCount }}</span>
-            @endif
-        </button>
-        <button type="button"
-                id="pending-tab-employees"
-                class="patron-dir__tab {{ $activeTab === 'employees' ? 'active' : '' }}"
-                role="tab"
-                aria-selected="{{ $activeTab === 'employees' ? 'true' : 'false' }}"
-                aria-controls="pending-panel-employees"
-                data-pending-tab="employees">
-            Faculty &amp; staff
-            @if($employeeCount > 0)
-                <span class="patron-dir__quick-action-count">{{ $employeeCount }}</span>
-            @endif
-        </button>
-    </nav>
+            <div id="studentTable" class="{{ $showStudents ? '' : 'hidden' }}">
+                <h4>Pending Student Registrations</h4>
+                <div class="table-responsive">
+                    <table class="table table-bordered mt-3 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Profile</th>
+                                <th>Name</th>
+                                <th>Course</th>
+                                <th>Year</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($pendingStudents as $p)
+                                <tr>
+                                    <td>
+                                        @if($p->profile_picture)
+                                            <img src="{{ asset($p->profile_picture) }}" width="80" alt="">
+                                        @else
+                                            No Image
+                                        @endif
+                                    </td>
+                                    <td>{{ $p->firstname }} {{ $p->lastname }}</td>
+                                    <td>{{ $p->course }}</td>
+                                    <td>{{ $p->year }}</td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-success btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                Actions
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <form action="{{ route('students.approve', $p->id) }}" method="POST">
+                                                        @csrf
+                                                        <button class="dropdown-item">Approve</button>
+                                                    </form>
+                                                </li>
+                                                <li>
+                                                    <form action="{{ route('students.reject', $p->id) }}" method="POST">
+                                                        @csrf
+                                                        <button class="dropdown-item">Reject</button>
+                                                    </form>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="5">No pending student registrations</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-    <div id="pending-panel-students"
-         class="patron-dir__pending-panel {{ $activeTab === 'students' ? 'is-active' : '' }}"
-         role="tabpanel"
-         aria-labelledby="pending-tab-students"
-         data-hydratable-panel
-         data-loading="false"
-         data-form="#pending-filter-form"
-         data-skeleton="#pending-students-skeleton"
-         data-pagination=".data-panel-pagination"
-         data-path-match="/pending"
-         data-enabled-when-visible="true"
-         data-tab-input="#pendingTab">
-        @include('pending.partials.students-table', [
-            'pendingStudents' => $pendingStudents,
-            'programs' => $programs,
-            'search' => $search ?? request('search'),
-        ])
-    </div>
+            <div id="employeeTable" class="{{ $showEmployees ? '' : 'hidden' }}">
+                <h4>Pending Faculty &amp; Staff Registrations</h4>
+                <div class="table-responsive">
+                    <table class="table table-bordered mt-3 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Profile</th>
+                                <th>Name</th>
+                                <th>ID</th>
+                                <th>Designation</th>
+                                <th>Program</th>
+                                <th>Start year</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($pendingEmployees as $e)
+                                <tr>
+                                    <td>
+                                        @if($e->formal_picture)
+                                            <img src="{{ asset($e->formal_picture) }}" width="80" alt="">
+                                        @else
+                                            No Image
+                                        @endif
+                                    </td>
+                                    <td>{{ $e->firstname }} {{ $e->middle_initial ? $e->middle_initial.'. ' : '' }}{{ $e->lastname }}</td>
+                                    <td>{{ $e->employee_id }}</td>
+                                    <td>{{ $e->designation ?? $e->position }}</td>
+                                    <td>{{ $e->program ?? $e->department }}</td>
+                                    <td>{{ $e->year_start_work ?? '-' }}</td>
+                                    <td>
+                                        <form action="{{ route('employees.approve', $e->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-success btn-sm">Approve</button>
+                                        </form>
+                                        <form action="{{ route('employees.reject', $e->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-danger btn-sm">Reject</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7">No pending faculty &amp; staff registrations</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-    <div id="pending-panel-employees"
-         class="patron-dir__pending-panel {{ $activeTab === 'employees' ? 'is-active' : '' }}"
-         role="tabpanel"
-         aria-labelledby="pending-tab-employees"
-         data-hydratable-panel
-         data-loading="false"
-         data-form="#pending-filter-form"
-         data-skeleton="#pending-employees-skeleton"
-         data-pagination=".data-panel-pagination"
-         data-path-match="/pending"
-         data-enabled-when-visible="true"
-         data-tab-input="#pendingTab">
-        @include('pending.partials.employees-table', [
-            'pendingEmployees' => $pendingEmployees,
-            'programs' => $programs,
-            'search' => $search ?? request('search'),
-        ])
+            <div id="facultyTable" class="{{ $showFaculty ? '' : 'hidden' }}">
+                <h4>Pending Teaching Faculty (Mobile App)</h4>
+                <p class="text-muted mb-2">These accounts unlock classrooms and book recommendations in the mobile app after approval.</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered mt-3 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Employee ID</th>
+                                <th>Designation</th>
+                                <th>Department</th>
+                                <th>Mobile</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($pendingFaculty as $f)
+                                <tr>
+                                    <td>{{ $f->firstname }} {{ $f->middle_initial ? $f->middle_initial.'. ' : '' }}{{ $f->lastname }}</td>
+                                    <td>{{ $f->employee_id }}</td>
+                                    <td>{{ $f->designation ?? '-' }}</td>
+                                    <td>{{ $f->department ?? '-' }}</td>
+                                    <td>{{ $f->mobile_number ?? '-' }}</td>
+                                    <td>
+                                        <form action="{{ route('faculty.approve', $f->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-success btn-sm">Approve</button>
+                                        </form>
+                                        <form action="{{ route('faculty.reject', $f->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-danger btn-sm">Reject</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6">No pending teaching faculty registrations</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+@endsection
 
-<template id="pending-students-skeleton">
-    @include('partials.skeleton-table', [
-        'columns' => 5,
-        'rows' => 8,
-        'loadingLabel' => 'Loading pending students…',
-        'headers' => ['Applicant', 'Program', 'Year', 'Submitted', 'Decision'],
-        'skeletonFirstCol' => 'avatar',
-    ])
-</template>
+@section('scripts')
+<script>
+    const studentTable = document.getElementById('studentTable');
+    const employeeTable = document.getElementById('employeeTable');
+    const facultyTable = document.getElementById('facultyTable');
+    const btnStudents = document.getElementById('showStudents');
+    const btnEmployees = document.getElementById('showEmployees');
+    const btnFaculty = document.getElementById('showFaculty');
 
-<template id="pending-employees-skeleton">
-    @include('partials.skeleton-table', [
-        'columns' => 6,
-        'rows' => 8,
-        'loadingLabel' => 'Loading pending faculty & staff…',
-        'headers' => ['Applicant', 'Designation', 'Program', 'Start year', 'Submitted', 'Decision'],
-        'skeletonFirstCol' => 'avatar',
-    ])
-</template>
+    function setActive(activeBtn) {
+        [btnStudents, btnEmployees, btnFaculty].forEach((btn) => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+        });
+        activeBtn.classList.remove('btn-outline-primary');
+        activeBtn.classList.add('btn-primary');
+    }
+
+    btnStudents.addEventListener('click', () => {
+        studentTable.classList.remove('hidden');
+        employeeTable.classList.add('hidden');
+        facultyTable.classList.add('hidden');
+        setActive(btnStudents);
+    });
+
+    btnEmployees.addEventListener('click', () => {
+        employeeTable.classList.remove('hidden');
+        studentTable.classList.add('hidden');
+        facultyTable.classList.add('hidden');
+        setActive(btnEmployees);
+    });
+
+    btnFaculty.addEventListener('click', () => {
+        facultyTable.classList.remove('hidden');
+        studentTable.classList.add('hidden');
+        employeeTable.classList.add('hidden');
+        setActive(btnFaculty);
+    });
+</script>
 @endsection

@@ -1,18 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Library Attendance & Book RFID</title>
+  <title>USM Library Attendance</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="{{ asset(config('branding.css_path')) }}">
-  <link rel="stylesheet" href="{{ asset('css/attendance/scan.css') }}">
-  <link rel="stylesheet" href="{{ asset('css/brand-typography.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/attendance/scan.css') }}?v={{ filemtime(public_path('css/attendance/scan.css')) }}">
+  <link href="{{ asset('vendor/fontsource/poppins/latin-400.css') }}" rel="stylesheet">
+  <link href="{{ asset('vendor/fontsource/poppins/latin-600.css') }}" rel="stylesheet">
+  <link href="{{ asset('vendor/fontsource/poppins/latin-700.css') }}" rel="stylesheet">
+  @include('components.branding-overrides')
   <style>
+    /* USM kiosk theme (matches production gate terminal) */
+    body.attendance-kiosk {
+      --brand-nav-link: #2e7d32;
+      --brand-button-bg: #2e7d32;
+      --brand-button-hover-bg: #1b5e20;
+      --brand-button-text: #ffffff;
+      --brand-footer-bg: #2e7d32;
+      --brand-nav-link-active: #ffffff;
+      --brand-button-hover-text: #ffffff;
+    }
+
     .marquee-container {
       width: 100%;
       overflow: hidden;
       background-color: #222;
       color: #fff;
-      border-top: 2px solid #444;
+      border-top: 2px solid #2e7d32;
+      border-bottom: 2px solid #2e7d32;
       padding: 15px 0;
       box-sizing: border-box;
     }
@@ -22,7 +36,7 @@
       white-space: nowrap;
       padding-left: 100%;
       animation: scroll-text 15s linear infinite;
-      font-family: var(--brand-font-family, 'Poppins', sans-serif);
+      font-family: 'Poppins', sans-serif;
       font-weight: 700;
       font-size: 24px;
     }
@@ -33,13 +47,16 @@
     }
   </style>
 </head>
-<body>
+<body class="attendance-kiosk">
   <header>
     <div class="header">
       <div class="logo-title">
-        <img src="{{ asset('images/pantasLogo.png') }}" alt="Logo">
+        <div class="kiosk-brand">
+          <img src="{{ asset('img/usm_logo_1954.png') }}" alt="USM Logo">
+          <span class="university-name">UNIVERSITY OF SOUTHERN MINDANAO</span>
+        </div>
         <div class="system-title">POWERED BY PANTAS</div>
-        <a href="{{ route('book.index') }}" class="home-button" hidden>Home</a>
+        <a href="{{ url('/') }}" class="home-button">Home</a>
       </div>
     </div>
   </header>
@@ -94,8 +111,12 @@
         <textarea name="qrcode" id="qrcode" style="opacity:0; position:absolute;" autofocus autocomplete="off"></textarea>
       </form>
 
-      <video autoplay loop controls class="ads-vid">
-        <source src="{{ asset('videos/area51_product_slideshow.mp4') }}" type="video/mp4">
+      <video autoplay muted loop playsinline controls class="ads-vid">
+        @if (is_file(public_path('videos/library-bg.mp4')))
+          <source src="{{ asset('videos/library-bg.mp4') }}" type="video/mp4">
+        @elseif (is_file(public_path('videos/area51_product_slideshow.mp4')))
+          <source src="{{ asset('videos/area51_product_slideshow.mp4') }}" type="video/mp4">
+        @endif
         Your browser does not support the video tag.
       </video>
     </div>
@@ -106,7 +127,7 @@
       <div class="footer-logo">
         <div class="marquee-container">
           <div class="marquee">
-            Welcome to Governor Generoso College of Arts, Sciences and Technology
+            Welcome to University of Southern Mindanao - Kabacan
           </div>
         </div>
       </div>
@@ -133,6 +154,7 @@
     const LOGOUT_FEEDBACK_ENABLED = @json($logoutFeedbackEnabled ?? true);
     const feedbackModal = document.getElementById('feedbackModal');
     let currentStudentId = null;
+    let currentEmployeeId = null;
     let clearDisplayTimer = null;
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -152,6 +174,7 @@
         profileImg.src = "{{ asset('images/2x2_undifined_gender.jpg') }}";
         document.querySelectorAll('.name-box').forEach(box => box.remove());
         currentStudentId = null;
+        currentEmployeeId = null;
       }
 
       function scheduleClear(delayMs) {
@@ -162,7 +185,7 @@
       }
 
       function showLogoutFeedback() {
-        if (!LOGOUT_FEEDBACK_ENABLED || !feedbackModal || !currentStudentId) {
+        if (!LOGOUT_FEEDBACK_ENABLED || !feedbackModal || (!currentStudentId && !currentEmployeeId)) {
           scheduleClear(2000);
           return;
         }
@@ -198,17 +221,19 @@
             }
             clearDisplay();
 
-            if (data.type === 'student') {
-              currentStudentId = data.student_id;
-              const pic = data.student.profile_picture
-                ? "{{ asset('') }}" + data.student.profile_picture
+            if (data.type === 'student' || data.type === 'employee') {
+              const patron = data.type === 'student' ? data.student : data.employee;
+              currentStudentId = data.type === 'student' ? data.student_id : null;
+              currentEmployeeId = data.type === 'employee' ? data.employee_id : null;
+              const pic = patron.profile_picture
+                ? "{{ asset('') }}" + patron.profile_picture
                 : "{{ asset('images/2x2_undifined_gender.jpg') }}";
               profileImg.src = pic;
 
               const div = document.createElement('div');
               div.classList.add('name-box');
               div.innerHTML = `
-                <div class="student-name">${data.student.firstname} ${data.student.lastname}</div>
+                <div class="student-name">${patron.firstname} ${patron.lastname}</div>
                 <div class="label">Name</div>
                 <div class="status-button ${data.status.toLowerCase() === 'out' ? 'status-out' : ''}">${data.status}</div>
                 <div class="timestamp">${data.log.scanned_at}</div>
@@ -274,14 +299,14 @@
       }
 
       function sendFeedback(rating = null, declined = 0) {
-        if (!currentStudentId) {
+        if (!currentStudentId && !currentEmployeeId) {
           closeFeedbackModal();
           clearDisplay();
           input.focus();
           return;
         }
 
-        fetch("{{ route('attendance.feedback.store') }}", {
+        fetch("{{ route('library.attendance.feedback.store') }}", {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -290,6 +315,7 @@
           },
           body: JSON.stringify({
             student_id: currentStudentId,
+            employee_id: currentEmployeeId,
             rating: rating,
             declined: declined ? 1 : 0,
           }),

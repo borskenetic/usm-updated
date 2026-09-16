@@ -4,17 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Book;
 use App\Models\BookLog;
-use App\Models\BookReservation;
-use App\Models\Employee;
-use App\Services\AdminActivityLogger;
 use App\Models\FineSetting;
-use App\Models\Setting;
 use App\Models\Student;
-use App\Support\LoanDueDate;
+use App\Services\CirculationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use App\Support\PerPage;
-use Illuminate\Support\Facades\DB;
 
 class BookLogController extends Controller
 {
@@ -71,14 +65,13 @@ class BookLogController extends Controller
     /**
      * Cooldown: after returning a book, the same student must wait before borrowing the same book again.
      */
-    protected function enforceReborrowCooldownOrNull(?int $studentId, ?int $employeeId, int $bookId): ?string
+    protected function enforceReborrowCooldownOrNull(int $studentId, int $bookId): ?string
     {
         $latestReturn = BookLog::query()
+            ->where('student_id', $studentId)
             ->where('book_id', $bookId)
             ->where('status', 'Checked In')
             ->whereNotNull('returned_date')
-            ->when($studentId, fn ($q) => $q->where('student_id', $studentId))
-            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
             ->orderByDesc('returned_date')
             ->value('returned_date');
 
@@ -87,11 +80,11 @@ class BookLogController extends Controller
         }
 
         $returnedAt = Carbon::parse($latestReturn)->timezone('Asia/Manila');
-        $allowedAt = $returnedAt->copy()->addDays(Setting::reborrowCooldownDays());
+        $allowedAt = $returnedAt->copy()->addDays(BookController::reborrowCooldownDays());
         $now = Carbon::now('Asia/Manila');
 
         if ($now->lt($allowedAt)) {
-            return 'This patron must wait '.Setting::reborrowCooldownDays().' days after returning this book before borrowing it again. (Available again on '.$allowedAt->format('M j, Y').')';
+            return 'This patron must wait '.BookController::reborrowCooldownDays().' days after returning this book before borrowing it again. (Available again on '.$allowedAt->format('M j, Y').')';
         }
 
         return null;
@@ -99,7 +92,7 @@ class BookLogController extends Controller
 
     public function index(Request $request)
     {
-        $logs = BookLog::with(['book', 'student', 'employee']);
+        $logs = BookLog::with(['book', 'student']);
 
         if ($request->filled('student_id')) {
             $student = Student::find($request->student_id);
@@ -108,17 +101,6 @@ class BookLogController extends Controller
                 $legacySpace = trim("{$student->firstname} {$student->lastname}");
                 $logs->where(function ($q) use ($student, $legacyComma, $legacySpace) {
                     $q->where('student_id', $student->id)
-                        ->orWhere('patron_name', $legacyComma)
-                        ->orWhere('patron_name', $legacySpace);
-                });
-            }
-        } elseif ($request->filled('employee_id')) {
-            $employee = Employee::find($request->employee_id);
-            if ($employee) {
-                $legacyComma = "{$employee->lastname}, {$employee->firstname}";
-                $legacySpace = trim("{$employee->firstname} {$employee->lastname}");
-                $logs->where(function ($q) use ($employee, $legacyComma, $legacySpace) {
-                    $q->where('employee_id', $employee->id)
                         ->orWhere('patron_name', $legacyComma)
                         ->orWhere('patron_name', $legacySpace);
                 });
@@ -132,15 +114,6 @@ class BookLogController extends Controller
                             $s->where('firstname', 'like', '%'.$term.'%')
                                 ->orWhere('lastname', 'like', '%'.$term.'%')
                                 ->orWhere('id_number', 'like', '%'.$term.'%')
-                                ->orWhereRaw(
-                                    'LOWER(CONCAT(firstname, \' \', lastname)) LIKE ?',
-                                    ['%'.strtolower($term).'%']
-                                );
-                        })
-                        ->orWhereHas('employee', function ($e) use ($term) {
-                            $e->where('firstname', 'like', '%'.$term.'%')
-                                ->orWhere('lastname', 'like', '%'.$term.'%')
-                                ->orWhere('employee_id', 'like', '%'.$term.'%')
                                 ->orWhereRaw(
                                     'LOWER(CONCAT(firstname, \' \', lastname)) LIKE ?',
                                     ['%'.strtolower($term).'%']
@@ -176,18 +149,13 @@ class BookLogController extends Controller
             }
         }
 
-        $logs = $logs->latest()->paginate(PerPage::resolve($request, 10))->withQueryString();
+        $logs = $logs->latest()->paginate(10);
 
         $prefillPatronLabel = '';
         if ($request->filled('student_id')) {
             $ps = Student::find($request->student_id);
             if ($ps) {
                 $prefillPatronLabel = $this->patronDisplayLabel($ps);
-            }
-        } elseif ($request->filled('employee_id')) {
-            $pe = Employee::find($request->employee_id);
-            if ($pe) {
-                $prefillPatronLabel = $this->employeeDisplayLabel($pe);
             }
         } elseif ($request->filled('filter_patron')) {
             $prefillPatronLabel = trim((string) $request->filter_patron);
@@ -200,35 +168,11 @@ class BookLogController extends Controller
             $request->input('rfid', '')
         ));
 
-        $prefillCopyReserved = false;
-        $prefillReservationStudentId = null;
-        if ($prefillCopyIdentifier !== '') {
-            $prefillBook = Book::findByCopyIdentifier($prefillCopyIdentifier);
-            if ($prefillBook) {
-                $prefillCopyReserved = $prefillBook->isReserved();
-                $activeHold = BookReservation::activeForBook((int) $prefillBook->id);
-                if ($activeHold && $activeHold->student && $prefillBook->availability !== 'Borrowed') {
-                    if (! $request->filled('student_id') && ! $request->filled('employee_id') && $prefillPatronLabel === '') {
-                        $prefillPatronLabel = $this->patronDisplayLabel($activeHold->student);
-                        $prefillReservationStudentId = $activeHold->student_id;
-                    }
-                }
-            }
-        }
-
-        $fineSettings = FineSetting::latest('created_at')->first();
-        $loanDefaultDaysStudent = $fineSettings?->studentLoanDurationDays() ?? FineSetting::DEFAULT_LOAN_DURATION_DAYS;
-        $loanDefaultDaysEmployee = $fineSettings?->employeeLoanDurationDays() ?? FineSetting::DEFAULT_LOAN_DURATION_DAYS;
-
         return view('books.logs', compact(
             'logs',
             'prefillPatronLabel',
             'filterBookTitle',
             'prefillCopyIdentifier',
-            'prefillCopyReserved',
-            'prefillReservationStudentId',
-            'loanDefaultDaysStudent',
-            'loanDefaultDaysEmployee',
         ));
     }
 
@@ -240,10 +184,7 @@ class BookLogController extends Controller
             'copy_identifier' => 'nullable|string|max:255',
             'rfid' => 'nullable|string|max:255',
             'status' => 'required|string|in:checked_out,room_use,checked_in',
-            'student_id' => 'nullable|integer|exists:students,id|required_without:employee_id',
-            'employee_id' => 'nullable|integer|exists:employees,id|required_without:student_id',
-            'due_date' => 'nullable|date|after_or_equal:today',
-            'loan_duration_days' => 'nullable|integer|min:1|max:365',
+            'student_id' => 'required|integer|exists:library_students,id',
         ]);
 
         if ($copyCode === '') {
@@ -259,29 +200,8 @@ class BookLogController extends Controller
             );
         }
 
-        $action = $request->status;
-        if ($action === 'checked_out' && $book->isReserved()) {
-            return back()->withInput()->with(
-                'error',
-                'This copy is reserved for room use only and cannot be checked out.'
-            );
-        }
-
-        $student = null;
-        $employee = null;
-        $studentId = $request->filled('student_id') ? (int) $request->student_id : null;
-        $employeeId = $request->filled('employee_id') ? (int) $request->employee_id : null;
-
-        if ($employeeId) {
-            $employee = Employee::findOrFail($employeeId);
-            $patronName = "{$employee->lastname}, {$employee->firstname}";
-            if ($employee->middle_initial) {
-                $patronName .= ' '.$employee->middle_initial.'.';
-            }
-        } else {
-            $student = Student::findOrFail($studentId);
-            $patronName = "{$student->lastname}, {$student->firstname}";
-        }
+        $student = Student::findOrFail($request->student_id);
+        $patronName = "{$student->lastname}, {$student->firstname}";
 
         $action = $request->status;
         $isOutbound = in_array($action, ['checked_out', 'room_use'], true);
@@ -298,125 +218,57 @@ class BookLogController extends Controller
             return back()->with('error', 'This book is already checked in.');
         }
 
-        if ($action === 'checked_in' && $lastLog) {
-            if ($employeeId && $lastLog->employee_id) {
-                if ($employeeId !== (int) $lastLog->employee_id) {
-                    return back()->with('error', 'Patron must match the faculty/staff member who has this book.');
-                }
-            } elseif ($studentId && $lastLog->student_id) {
-                if ($studentId !== (int) $lastLog->student_id) {
-                    return back()->with('error', 'Patron must match the student who has this book.');
-                }
+        if ($action === 'checked_in') {
+            try {
+                $result = app(CirculationService::class)->checkInBook($book, $student);
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage());
             }
+
+            if ($result['overdue_modal']) {
+                session()->flash('overdue_modal', $result['overdue_modal']);
+            }
+
+            return back()->with('success', 'Book has been Checked In successfully!');
         }
 
         if ($isOutbound) {
-            $cooldownError = $this->enforceReborrowCooldownOrNull($studentId, $employeeId, (int) $book->id);
+            $cooldownError = $this->enforceReborrowCooldownOrNull((int) $student->id, (int) $book->id);
             if ($cooldownError) {
                 return back()->with('error', $cooldownError);
             }
 
-            $active = $studentId
-                ? BookLog::countActiveLoansForStudent($studentId)
-                : BookLog::countActiveLoansForEmployee($employeeId);
-
-            if ($studentId) {
-                if (Setting::wouldExceedStudentLoanLimit($active)) {
-                    $studentMax = Setting::maxLoansForStudents();
-                    return back()->with(
-                        'error',
-                        'This patron already has the maximum of '.$studentMax.' books on loan (including room use). Check one in first, or use check out only for books taken outside the library.'
-                    );
-                }
-            } elseif (Setting::wouldExceedEmployeeLoanLimit($active)) {
-                $employeeMax = Setting::maxLoansForEmployees();
+            $active = BookLog::countActiveLoansForStudent((int) $student->id);
+            if ($active >= BookController::maxConcurrentLoansPerStudent()) {
                 return back()->with(
                     'error',
-                    'This patron already has the maximum of '.$employeeMax.' books on loan (including room use). Check one in first, or use check out only for books taken outside the library.'
+                    'This patron already has the maximum of '.BookController::maxConcurrentLoansPerStudent().' books on loan (including room use). Check one in first, or use check out only for books taken outside the library.'
                 );
             }
         }
 
-        if ($isOutbound && $action === 'checked_out') {
-            $holdError = BookReservation::copyBlockedForStudent($book, $studentId);
-            if ($holdError) {
-                return back()->withInput()->with('error', $holdError);
-            }
-        }
-
         $newStatus = $isOutbound ? 'Checked Out' : 'Checked In';
-        if ($isOutbound) {
-            $book->availability = 'Borrowed';
-        } else {
-            BookReservation::activatePendingForBook($book);
-        }
+        $book->availability = $isOutbound ? 'Borrowed' : 'Available';
 
         $circulationType = BookLog::CIRCULATION_CHECKOUT;
         if ($isOutbound && $action === 'room_use') {
             $circulationType = BookLog::CIRCULATION_ROOM_USE;
-        } elseif (! $isOutbound && $lastLog) {
-            $circulationType = $lastLog->circulation_type ?? BookLog::CIRCULATION_CHECKOUT;
         }
 
-        $settings = FineSetting::latest('created_at')->first();
+        $settings = FineSetting::currentOrDefault();
 
         $dueDate = null;
         $returnedDate = null;
         $fineIncurred = null;
 
         if ($isOutbound && $action === 'checked_out') {
-            $loanTerms = LoanDueDate::resolveFromRequest(
-                Carbon::now('Asia/Manila'),
-                $settings,
-                $request->input('due_date'),
-                $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null,
-                (bool) $employeeId,
-            );
-            $dueDate = $loanTerms['due_date'];
-        }
-
-        if ($action === 'checked_in') {
-            $returnedDate = Carbon::now('Asia/Manila');
-
-            if ($lastLog && $lastLog->due_date) {
-                $dueDate = $lastLog->due_date;
-
-                $isEmployeePatron = (bool) ($employeeId ?: $lastLog?->employee_id);
-                $patronTerms = $settings
-                    ? $settings->patronTerms($isEmployeePatron)
-                    : (object) ['grace_period_days' => 0, 'fine_per_day' => 0, 'max_fine' => null];
-                $gracePeriod = $patronTerms->grace_period_days ?? 0;
-                $finePerDay = $patronTerms->fine_per_day ?? 0;
-                $maxFine = $patronTerms->max_fine;
-
-                $overdueDays = $this->calculateOverdueDays(
-                    Carbon::parse($dueDate)->startOfDay(),
-                    $returnedDate->copy()->startOfDay(),
-                    $gracePeriod
-                );
-
-                $fineIncurred = $overdueDays * $finePerDay;
-
-                if ($overdueDays > 0) {
-                    session()->flash('overdue_modal', [
-                        'book_title' => $book->title_statement,
-                        'patron_name' => $patronName,
-                        'days_late' => $overdueDays,
-                        'fine' => $fineIncurred,
-                        'breakdown' => "{$overdueDays} day(s) × ₱".number_format($finePerDay, 2).' = ₱'.number_format($fineIncurred, 2),
-                    ]);
-                }
-
-                if (! is_null($maxFine)) {
-                    $fineIncurred = min($fineIncurred, $maxFine);
-                }
-            }
+            $loanDays = $settings->studentLoanDurationDays();
+            $dueDate = $this->addBusinessDays(Carbon::now('Asia/Manila'), $loanDays);
         }
 
         BookLog::create([
             'book_id' => $book->id,
-            'student_id' => $studentId,
-            'employee_id' => $employeeId,
+            'student_id' => $student->id,
             'patron_name' => $patronName,
             'status' => $newStatus,
             'circulation_type' => $circulationType,
@@ -427,28 +279,7 @@ class BookLogController extends Controller
             'fine_incurred' => $fineIncurred,
         ]);
 
-        if ($isOutbound && $action === 'checked_out' && $studentId) {
-            BookReservation::fulfillForBookAndStudent((int) $book->id, $studentId);
-        }
-
         $book->save();
-
-        if ($action === 'checked_out') {
-            AdminActivityLogger::circulation(
-                'Book checked out',
-                "{$patronName} — «{$book->title_statement}»",
-            );
-        } elseif ($action === 'checked_in') {
-            AdminActivityLogger::circulation(
-                'Book checked in',
-                "{$patronName} returned «{$book->title_statement}»",
-            );
-        } elseif ($action === 'room_use') {
-            AdminActivityLogger::circulation(
-                'Room use recorded',
-                "{$patronName} — «{$book->title_statement}» (in library)",
-            );
-        }
 
         if ($action === 'room_use') {
             return back()->with('success', 'Room use recorded (in library only). Remind the patron to check in when finished.');
@@ -460,7 +291,7 @@ class BookLogController extends Controller
     public function renew(Request $request, Book $book)
     {
         $request->validate([
-            'student_id' => 'required|integer|exists:students,id',
+            'student_id' => 'required|integer|exists:library_students,id',
         ]);
 
         $studentId = (int) $request->student_id;
@@ -487,18 +318,12 @@ class BookLogController extends Controller
         }
 
         $renewCount = (int) ($lastLog->renew_count ?? 0);
-        $maxRenewals = Setting::maxRenewalsPerLoan();
-        if ($renewCount >= $maxRenewals) {
-            return back()->with('error', 'Renewal limit reached (max '.$maxRenewals.' renewals).');
+        if ($renewCount >= BookController::maxRenewalsPerLoan()) {
+            return back()->with('error', 'Renewal limit reached (max '.BookController::maxRenewalsPerLoan().' renewals).');
         }
 
-        if (BookReservation::blocksRenewal((int) $book->id)) {
-            return back()->with('error', 'Renewal blocked: another patron has reserved this copy.');
-        }
-
-        $settings = FineSetting::latest('created_at')->first();
-        $isEmployee = (bool) $lastLog->employee_id;
-        $loanDays = (int) ($settings?->patronTerms($isEmployee)->loan_duration_days ?? FineSetting::DEFAULT_LOAN_DURATION_DAYS);
+        $settings = FineSetting::currentOrDefault();
+        $loanDays = (int) $settings->studentLoanDurationDays();
 
         $base = Carbon::parse($lastLog->due_date, 'Asia/Manila');
         $newDue = $this->addBusinessDays($base, $loanDays);
@@ -508,12 +333,7 @@ class BookLogController extends Controller
         $lastLog->last_renewed_at = Carbon::now('Asia/Manila');
         $lastLog->save();
 
-        AdminActivityLogger::circulation(
-            'Loan renewed',
-            "{$lastLog->patron_name} — «{$book->title_statement}» (due {$newDue->format('Y-m-d')})",
-        );
-
-        return back()->with('success', 'Loan renewed. New due date: '.$newDue->format('Y-m-d').'. ('.$lastLog->renew_count.'/'.$maxRenewals.' renewals used)');
+        return back()->with('success', 'Loan renewed. New due date: '.$newDue->format('Y-m-d').'. ('.$lastLog->renew_count.'/'.BookController::maxRenewalsPerLoan().' renewals used)');
     }
 
     protected function patronDisplayLabel(Student $s): string
@@ -524,72 +344,6 @@ class BookLogController extends Controller
         }
 
         return $label;
-    }
-
-    protected function employeeDisplayLabel(Employee $e): string
-    {
-        $label = "{$e->lastname}, {$e->firstname}";
-        if ($e->middle_initial) {
-            $label .= ' '.$e->middle_initial.'.';
-        }
-        if ($e->employee_id) {
-            $label .= " ({$e->employee_id})";
-        }
-
-        return $label.' · Staff';
-    }
-
-    /**
-     * @return list<array{id: int, type: string, name: string}>
-     */
-    protected function patronSuggestionItems(string $search, int $limit = 10): array
-    {
-        if (trim($search) === '') {
-            return [];
-        }
-
-        $students = Student::query()
-            ->where(function ($q) use ($search) {
-                $q->where('firstname', 'LIKE', "%{$search}%")
-                    ->orWhere('lastname', 'LIKE', "%{$search}%")
-                    ->orWhere('id_number', 'LIKE', "%{$search}%")
-                    ->orWhereRaw(
-                        'LOWER(CONCAT(firstname, \' \', lastname)) LIKE ?',
-                        ['%'.strtolower($search).'%']
-                    );
-            })
-            ->limit($limit)
-            ->get()
-            ->map(fn ($s) => [
-                'id' => $s->id,
-                'type' => 'student',
-                'name' => $this->patronDisplayLabel($s),
-            ]);
-
-        $employees = Employee::query()
-            ->where(function ($q) use ($search) {
-                $q->where('firstname', 'LIKE', "%{$search}%")
-                    ->orWhere('lastname', 'LIKE', "%{$search}%")
-                    ->orWhere('employee_id', 'LIKE', "%{$search}%")
-                    ->orWhere('designation', 'LIKE', "%{$search}%")
-                    ->orWhereRaw(
-                        'LOWER(CONCAT(firstname, \' \', lastname)) LIKE ?',
-                        ['%'.strtolower($search).'%']
-                    );
-            })
-            ->limit($limit)
-            ->get()
-            ->map(fn ($e) => [
-                'id' => $e->id,
-                'type' => 'employee',
-                'name' => $this->employeeDisplayLabel($e),
-            ]);
-
-        return $students->concat($employees)
-            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
-            ->take($limit)
-            ->values()
-            ->all();
     }
 
     public function bookTitleLogSuggestions(Request $request)
@@ -614,15 +368,29 @@ class BookLogController extends Controller
 
     public function patronSuggestions(Request $request)
     {
-        $search = trim((string) $request->get('query', ''));
+        $search = $request->get('query', '');
 
-        return response()->json($this->patronSuggestionItems($search));
+        $suggestions = Student::where(function ($q) use ($search) {
+            $q->where('firstname', 'LIKE', "%{$search}%")
+                ->orWhere('lastname', 'LIKE', "%{$search}%")
+                ->orWhere('id_number', 'LIKE', "%{$search}%")
+                ->orWhereRaw(
+                    'LOWER(CONCAT(firstname, \' \', lastname)) LIKE ?',
+                    ['%'.strtolower($search).'%']
+                );
+        })
+            ->limit(10)
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $this->patronDisplayLabel($s),
+            ]);
+
+        return response()->json($suggestions);
     }
 
     public function bookSuggestions(Request $request)
     {
-        BookReservation::expireStale();
-
         $search = $request->get('query', '');
 
         $books = Book::whereNull('archived_at')->where(function ($q) use ($search) {
@@ -635,23 +403,13 @@ class BookLogController extends Controller
             ->limit(10)
             ->get();
 
-        $patronHolds = BookReservation::query()
-            ->whereIn('book_id', $books->pluck('id'))
-            ->active()
-            ->with('student')
-            ->get()
-            ->keyBy('book_id');
-
         return response()->json(
-            $books->map(function ($b) use ($patronHolds) {
-                $lastCheckout = BookLog::with(['student', 'employee'])
+            $books->map(function ($b) {
+                $lastCheckout = BookLog::with('student')
                     ->where('book_id', $b->id)
                     ->where('status', 'Checked Out')
                     ->latest('timestamp')
                     ->first();
-
-                $hold = $patronHolds->get($b->id);
-                $holdStudent = $hold?->student;
 
                 return [
                     'id' => $b->id,
@@ -663,15 +421,7 @@ class BookLogController extends Controller
                     'copy_identifier' => $b->copyIdentifierForCirculation(),
                     'copy_identifier_summary' => $b->copyIdentifierSummary(),
                     'availability' => $b->availability,
-                    'reserved' => (bool) $b->reserved,
-                    'patron_hold' => (bool) $hold,
-                    'patron_hold_status' => $hold?->status,
-                    'reservation_student_id' => $holdStudent?->id,
-                    'reservation_student_name' => $holdStudent
-                        ? $this->patronDisplayLabel($holdStudent)
-                        : null,
                     'last_student_id' => $lastCheckout?->student_id,
-                    'last_employee_id' => $lastCheckout?->employee_id,
                     'last_patron' => $lastCheckout ? $lastCheckout->patronLabel() : null,
                     'last_circulation_type' => $lastCheckout?->circulation_type,
                 ];

@@ -2,24 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Http\Controllers\SMSController;
-use App\Models\AttendanceLog;
-use App\Models\Student;
-use App\Services\AttendanceSessionService;
-use App\Models\Book;
+use App\Models\LibraryAttendanceSetting;
+use App\Models\LibraryStudent;
 use App\Models\Setting;
-use App\Models\BookLog;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
+use App\Services\LibraryVisitScanService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class AttendanceController extends Controller
 {
     public function showScanner()
     {
         return view('attendance.scan', [
-            'logoutFeedbackEnabled' => Setting::logoutFeedbackEnabled(),
+            'logoutFeedbackEnabled' => $this->libraryFeedbackEnabled(),
         ]);
     }
 
@@ -38,14 +34,6 @@ class AttendanceController extends Controller
 
         Setting::setLogoutFeedbackEnabled($request->input('enabled') === '1');
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'Attendance logout feedback '.($request->input('enabled') === '1' ? 'enabled' : 'disabled'),
-            null,
-            route('attendance.feedback.settings'),
-            'staff',
-        );
-
         return back()->with(
             'success',
             $request->input('enabled') === '1'
@@ -53,105 +41,30 @@ class AttendanceController extends Controller
                 : 'Logout feedback is now disabled on the attendance scanner.'
         );
     }
-    
-    private function parseQr($raw)
-    {
-        $raw = trim(str_replace("\r", "", $raw));
-    
-        // Case 3: multiline format
-        if (str_contains($raw, "\n")) {
-            $lines = array_values(array_filter(array_map('trim', explode("\n", $raw))));
-    
-            return [
-                'student_no' => $lines[0] ?? null,
-                'full_name'  => $lines[1] ?? null,
-                'course'     => $lines[2] ?? null,
-            ];
-        }
-    
-        // Otherwise comma-separated
-        $parts = array_map('trim', explode(',', $raw));
-    
-        // If first part looks like student number (20-80556)
-        if (preg_match('/^\d{2}-\d+$/', $parts[0] ?? '')) {
-            return [
-                'student_no' => $parts[0] ?? null,
-                'full_name'  => $parts[1] ?? null,
-                'course'     => $parts[2] ?? null,
-            ];
-        }
-    
-        // Format 2 (no student number)
-        return [
-            'student_no' => null,
-            'full_name'  => $parts[0] ?? null,
-            'course'     => $parts[1] ?? null,
-        ];
-    }
 
-    public function scan(Request $request)
+    /**
+     * Official kiosk scanner: Library patrons → library_attendance_logs.
+     */
+    public function scan(Request $request, LibraryVisitScanService $scanner): JsonResponse
     {
         $request->validate(['qrcode' => 'required|string']);
 
-        $token = trim(str_replace("\r", '', $request->qrcode));
-        $student = Student::where('qrcode', $token)->first();
+        $resolved = $scanner->resolve($request->qrcode);
+        $student = $resolved['student'];
+        $employee = $resolved['employee'];
 
-        $parsed = $this->parseQr($request->qrcode);
-
-        // ID number from multiline / comma format
-        if (! $student && $parsed['student_no']) {
-            $student = Student::where('id_number', $parsed['student_no'])->first();
-        }
-
-        if (! $student && $parsed['full_name']) {
-
-            $qrName = strtoupper($parsed['full_name']);
-            $qrName = preg_replace('/[^A-Z\s]/', '', $qrName);
-            $qrName = preg_replace('/\b[A-Z]\b/', '', $qrName);
-            $qrName = preg_replace('/\s+/', '', $qrName);
-        
-            $student = Student::where('normalized_name', $qrName)->first();
-        }
-        
-        if ($student) {
-            app(AttendanceSessionService::class)->closeStaleOpenInForStudent($student);
-
-            $lastLog = AttendanceLog::where('student_id', $student->id)
-                ->orderByDesc('scanned_at')
-                ->orderByDesc('id')
-                ->first();
-
-            $sessions = app(AttendanceSessionService::class);
-            $newStatus = ($lastLog && $sessions->isInStatus($lastLog->status)) ? 'OUT' : 'IN';
-
-            $log = AttendanceLog::create([
-                'student_id' => $student->id,
-                'status' => $newStatus,
-                'scanned_at' => Carbon::now('Asia/Manila'),
+        if (! $student && ! $employee) {
+            return response()->json([
+                'type' => 'error',
+                'message' => 'RFID not recognized.',
             ]);
-            
-            // Send attendance SMS
-            if (!empty($student->mobile_number)) {
-            
-                $template = Setting::where('key', 'scan_sms')->value('value')
-                    ?? 'Hello {name}, you scanned {status} at the library at {time}.';
-            
-                $message = str_replace(
-                    ['{name}', '{status}', '{time}'],
-                    [
-                        trim($student->firstname . ' ' . $student->lastname),
-                        $newStatus,
-                        Carbon::now('Asia/Manila')->format('h:i A'),
-                    ],
-                    $template
-                );
-            
-                app(SMSController::class)->sendDirect(
-                    $student->mobile_number,
-                    $message
-                );
-            }
-    
+        }
+
+        $result = $scanner->record($student, $employee, $request->input('section'));
+
+        if ($student) {
+            $this->maybeSendScanSms($student, $result['status']);
+
             return response()->json([
                 'type' => 'student',
                 'student_id' => $student->id,
@@ -160,47 +73,91 @@ class AttendanceController extends Controller
                     'lastname' => $student->lastname,
                     'profile_picture' => $student->profile_picture,
                 ],
-                'status' => $newStatus,
-                'logout_feedback_enabled' => Setting::logoutFeedbackEnabled(),
+                'status' => $result['status'],
+                'logout_feedback_enabled' => $this->libraryFeedbackEnabled(),
                 'log' => [
-                    'scanned_at' => $log->scanned_at->format('Y-m-d h:i:s A'),
+                    'scanned_at' => $result['log']->scanned_at->format('Y-m-d h:i:s A'),
                 ],
             ]);
         }
 
-    
-        // Neither
         return response()->json([
-            'type' => 'error',
-            'message' => 'RFID not recognized.'
+            'type' => 'employee',
+            'employee_id' => $employee->id,
+            'employee' => [
+                'firstname' => $employee->firstname,
+                'lastname' => $employee->lastname,
+                'profile_picture' => $employee->formal_picture,
+            ],
+            'status' => $result['status'],
+            'logout_feedback_enabled' => $this->libraryFeedbackEnabled(),
+            'log' => [
+                'scanned_at' => $result['log']->scanned_at->format('Y-m-d h:i:s A'),
+            ],
         ]);
     }
 
-    
+    private function maybeSendScanSms(LibraryStudent $student, string $status): void
+    {
+        if (empty($student->mobile_number)) {
+            return;
+        }
+
+        $template = Setting::where('key', 'scan_sms')->value('value')
+            ?? 'Hello {name}, you scanned {status} at the library at {time}.';
+
+        $message = str_replace(
+            ['{name}', '{status}', '{time}'],
+            [
+                trim($student->firstname.' '.$student->lastname),
+                $status,
+                Carbon::now('Asia/Manila')->format('h:i A'),
+            ],
+            $template
+        );
+
+        app(SMSController::class)->sendDirect(
+            $student->mobile_number,
+            $message
+        );
+    }
+
+    private function libraryFeedbackEnabled(): bool
+    {
+        $value = LibraryAttendanceSetting::query()
+            ->where('key', 'logout_feedback_enabled')
+            ->value('value');
+
+        if ($value === null) {
+            return true;
+        }
+
+        return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
+    }
+
     // Show the change video page
-    public function showChangeVideo() {
+    public function showChangeVideo()
+    {
         return view('attendance.change_video');
     }
-    
+
     // Handle video upload
-    public function uploadVideo(Request $request) {
+    public function uploadVideo(Request $request)
+    {
         $request->validate([
             'video' => 'required|file|mimes:mp4|max:512000', // 500MB
         ]);
-    
+
         $video = $request->file('video');
         $filename = 'area51_product_slideshow.mp4'; // overwrite existing
-        $video->move(base_path('videos'), $filename);
+        $destination = public_path('videos');
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'Attendance video updated',
-            $filename,
-            route('attendance.changeVideo'),
-            'staff',
-        );
-    
+        if (! is_dir($destination)) {
+            mkdir($destination, 0755, true);
+        }
+
+        $video->move($destination, $filename);
+
         return redirect()->route('attendance.changeVideo')->with('success', 'Video uploaded successfully!');
     }
-
 }

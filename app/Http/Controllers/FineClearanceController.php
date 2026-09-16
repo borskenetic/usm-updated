@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BookLog;
-use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
-use App\Support\PerPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +16,7 @@ class FineClearanceController extends Controller
         $logs = (clone $base)
             ->with(['book', 'student', 'clearedBy'])
             ->orderByDesc('returned_date')
-            ->paginate(PerPage::resolve($request, 20))
+            ->paginate(20)
             ->withQueryString();
 
         $totalOutstanding = round((float) (clone $base)->sum(DB::raw('COALESCE(fine_balance, fine_incurred)')), 2);
@@ -26,7 +24,7 @@ class FineClearanceController extends Controller
         return view('admin.fines_outstanding', compact('logs', 'totalOutstanding'));
     }
 
-    public function clear(Request $request, BookLog $bookLog)
+    public function clear(Request $request, BookLog $bookLog, AdminActivityLogger $activities)
     {
         $request->validate([
             'fine_clearance_type' => 'required|string|in:paid,waived',
@@ -82,15 +80,7 @@ class FineClearanceController extends Controller
         }
 
         $bookLog->save();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_CIRCULATION,
-            'Fine '.($request->fine_clearance_type === 'paid' ? 'payment' : 'waiver').' recorded',
-            "₱".number_format($amount, 2)." — {$bookLog->patron_name}",
-            route('fines.outstanding'),
-            'circulation',
-            $bookLog,
-        );
+        $activities->log('library', 'fine.cleared', 'Fine clearance recorded', (string) $amount, $bookLog);
 
         if ($newBalance <= 0) {
             return back()->with('success', 'Fine fully cleared as '.($request->fine_clearance_type === 'paid' ? 'paid' : 'waived').'.');

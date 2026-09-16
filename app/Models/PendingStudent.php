@@ -9,7 +9,7 @@ class PendingStudent extends Model
 {
     use HasFactory;
 
-    protected $table = 'pending_students';
+    protected $table = 'library_pending_students';
 
     protected $fillable = [
         'id_number',
@@ -21,7 +21,6 @@ class PendingStudent extends Model
         'course',
         'year',
         'mobile_number',
-        'email',
         'address',
         'emergency_person',
         'emergency_relationship',
@@ -30,7 +29,7 @@ class PendingStudent extends Model
         'profile_picture',
         'student_signature',
     ];
-    
+
     public function role()
     {
         return $this->belongsTo(Role::class);

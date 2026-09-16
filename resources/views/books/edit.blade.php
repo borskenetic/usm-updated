@@ -1,4 +1,4 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/books/create.css') }}">
@@ -37,22 +37,6 @@
           enctype="multipart/form-data" class="catalog-form">
         @csrf
         @method('PUT')
-
-        <div class="catalog-multicopy-toggle card mb-3">
-            <div class="card-body py-3">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" role="switch" name="add_copies" value="1"
-                           id="add_copies" {{ old('add_copies') ? 'checked' : '' }}>
-                    <label class="form-check-label fw-semibold" for="add_copies">
-                        Add more copies
-                    </label>
-                </div>
-                <p class="text-muted small mb-0 mt-2">
-                    Create additional copies of this title while you update the record. Each new copy needs its own
-                    <strong>accession number</strong> and <strong>RFID</strong>; bibliographic data is copied from this book.
-                </p>
-            </div>
-        </div>
 
         <div class="catalog-tabs card">
             <ul class="nav nav-tabs catalog-tabs__nav" id="catalogMainTabs" role="tablist">
@@ -94,7 +78,6 @@
                         'grouped' => true,
                         'tabbed' => true,
                     ])
-                    @include('books.partials.catalog_copy_rows', ['copyPanelMode' => 'edit'])
                 </div>
 
                 <div class="tab-pane fade" id="tab-programs" role="tabpanel"
@@ -104,7 +87,6 @@
                     </p>
                     <div class="row g-3">
                         @include('books.partials.catalog_curriculum_field', ['curriculumValue' => $book->curriculum])
-                        @include('books.partials.catalog_reserved_field', ['reservedValue' => old('reserved', $book->reserved)])
                         <div class="col-12">
                             <label class="form-label catalog-field-label">Program(s)</label>
                             <div id="program-container" class="program-stack">
@@ -198,7 +180,7 @@
             <div class="catalog-page__actions-nav d-flex gap-2">
                 <button type="button" class="btn btn-outline-secondary" id="catalogTabPrev" disabled>← Previous</button>
                 <button type="button" class="btn btn-outline-secondary" id="catalogTabNext">Next →</button>
-                <button type="submit" class="btn btn-update">{{ old('add_copies') ? 'Update & add copies' : 'Update book' }}</button>
+                <button type="submit" class="btn btn-update">Update book</button>
             </div>
         </footer>
     </form>
@@ -211,9 +193,5 @@
 @include('books.partials.catalog_tabs_script', ['formId' => 'editBookForm'])
 @include('books.partials.catalog_courses_script')
 @include('books.partials.catalog_programs_script')
-@include('books.partials.catalog_multicopy_script', [
-    'formId' => 'editBookForm',
-    'editMode' => true,
-])
 @include('books.partials.catalog_marc_pickers_script')
 @endsection

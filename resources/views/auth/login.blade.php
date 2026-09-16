@@ -1,77 +1,44 @@
-@extends('layouts.auth')
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Pantas</title>
+    <link href="{{ asset('vendor/fontsource/poppins/latin-400.css') }}" rel="stylesheet">
+    <link href="{{ asset('vendor/fontsource/poppins/latin-600.css') }}" rel="stylesheet">
+    <link href="{{ asset('vendor/fontsource/poppins/latin-700.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('css/auth-modal.css') }}?v=6">
+    <style>
+        html,
+        body {
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
 
-@section('title', 'Sign in')
+        *,
+        *::before,
+        *::after {
+            box-sizing: inherit;
+        }
 
-@section('content')
-    @if(file_exists(public_path('images/d.png')))
-        <div class="auth-page__logo-wrap">
-            <img src="{{ asset('images/d.png') }}" alt="{{ config('app.name') }}" class="auth-page__logo">
-        </div>
-    @endif
+        .direct-auth-page {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.22), transparent 28%),
+                linear-gradient(145deg, #071653, #123c8c 58%, #0b1f62);
+        }
+    </style>
+</head>
+<body class="direct-auth-page">
+    @include('partials.auth-modal', [
+        'forceAuthModalOpen' => true,
+        'authModalCloseUrl' => route('landing'),
+    ])
 
-    <div class="auth-page__hero">
-        <h1>Welcome back</h1>
-        </div>
-
-    @if(session('status'))
-        <div class="alert alert-success auth-page__alert">{{ session('status') }}</div>
-    @endif
-
-    @if(session('error'))
-        <div class="alert alert-danger auth-page__alert">{{ session('error') }}</div>
-    @endif
-
-    <form method="POST" action="{{ route('login') }}" novalidate>
-        @csrf
-
-        <div class="auth-page__field">
-            <label for="email">Email</label>
-            <input type="email"
-                   name="email"
-                   id="email"
-                   class="form-control @error('email') is-invalid @enderror"
-                   value="{{ old('email') }}"
-                   placeholder=""
-                   required
-                   autofocus
-                   autocomplete="username">
-            @error('email')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-            @enderror
-        </div>
-
-        <div class="auth-page__field">
-            <label for="password">Password</label>
-            <input type="password"
-                   name="password"
-                   id="password"
-                   class="form-control @error('password') is-invalid @enderror"
-                   placeholder=""
-                   required
-                   autocomplete="current-password">
-            @error('password')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-            @enderror
-        </div>
-
-        <div class="auth-page__row">
-            <label class="auth-page__remember" for="remember">
-                <input type="checkbox" name="remember" id="remember" value="1" @checked(old('remember'))>
-                Remember me
-            </label>
-            <a href="{{ route('password.request') }}" class="auth-page__link">Forgot password?</a>
-        </div>
-
-        <button type="submit" class="auth-page__btn auth-page__btn--primary">Sign in</button>
-    </form>
-
-    <div class="auth-page__divider">Patron services</div>
-
-    <a href="{{ route('patron.register') }}" class="auth-page__btn auth-page__btn--outline">
-        Patron self-registration
-    </a>
-@endsection
-
-@section('footer')
-
-@endsection
+    <script src="{{ asset('js/auth-modal.js') }}?v=4"></script>
+</body>
+</html>

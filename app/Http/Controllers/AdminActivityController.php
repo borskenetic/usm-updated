@@ -1,14 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\AdminActivity;
-use App\Support\PerPage;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
-class AdminActivityController extends Controller
+final class AdminActivityController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): View
     {
         $category = $request->input('category', 'patron');
         if (! in_array($category, ['patron', 'staff'], true)) {
@@ -28,62 +30,23 @@ class AdminActivityController extends Controller
             $query->staffActivities();
         }
 
-        if ($dateFrom) {
+        if (is_string($dateFrom) && $dateFrom !== '') {
             $query->whereDate('created_at', '>=', $dateFrom);
         }
 
-        if ($dateTo) {
+        if (is_string($dateTo) && $dateTo !== '') {
             $query->whereDate('created_at', '<=', $dateTo);
         }
 
         $activities = $query
-            ->paginate(PerPage::resolve($request, 30))
+            ->paginate(30)
             ->withQueryString();
 
-        return view('admin.activities.index', compact(
-            'activities',
-            'category',
-            'dateFrom',
-            'dateTo',
-        ));
-    }
-
-    public function recent(Request $request)
-    {
-        $user = $request->user();
-        $since = $user?->notification_last_seen_at;
-
-        $activities = AdminActivity::query()
-            ->patronNotifications()
-            ->latest()
-            ->limit(12)
-            ->get()
-            ->map(fn (AdminActivity $a) => [
-                'id' => $a->id,
-                'type' => $a->type,
-                'title' => $a->title,
-                'body' => $a->body,
-                'action_url' => $a->action_url,
-                'icon' => $a->icon,
-                'created_at' => $a->created_at?->timezone('Asia/Manila')->format('M j, g:i A'),
-                'is_unread' => ! $since || $a->created_at->gt($since),
-            ]);
-
-        $unreadCount = AdminActivity::query()
-            ->patronNotifications()
-            ->when($since, fn ($q) => $q->where('created_at', '>', $since))
-            ->count();
-
-        return response()->json([
-            'unread_count' => $unreadCount,
+        return view('admin.activities.index', [
             'activities' => $activities,
+            'category' => $category,
+            'dateFrom' => is_string($dateFrom) ? $dateFrom : null,
+            'dateTo' => is_string($dateTo) ? $dateTo : null,
         ]);
-    }
-
-    public function markSeen(Request $request)
-    {
-        $request->user()?->update(['notification_last_seen_at' => now()]);
-
-        return response()->json(['success' => true]);
     }
 }

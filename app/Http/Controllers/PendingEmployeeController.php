@@ -2,15 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AdminActivity;
 use App\Models\Employee;
 use App\Models\PendingEmployee;
+use App\Models\PendingFaculty;
 use App\Models\PendingStudent;
 use App\Models\Program;
 use App\Models\Role;
 use App\Services\AdminActivityLogger;
-use App\Support\MiddleInitial;
-use App\Support\PatronQrCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,23 +24,28 @@ class PendingEmployeeController extends Controller
         return view('pending.register', compact('roles', 'programs', 'workStartYears'));
     }
 
-    public function index(Request $request)
+    public function index()
     {
-        return redirect()->route('pending.index', array_merge(
-            $request->query(),
-            ['tab' => 'employees'],
+        $activeTab = 'employees';
+        $pendingEmployees = PendingEmployee::with('role')->latest()->get();
+        $pendingStudents = PendingStudent::with('role')->latest()->paginate(10)->withQueryString();
+        $pendingFaculty = PendingFaculty::query()->latest()->get();
+
+        return view('pending.index', compact(
+            'pendingStudents',
+            'pendingEmployees',
+            'pendingFaculty',
+            'activeTab'
         ));
     }
 
     public function store(Request $request)
     {
-        MiddleInitial::mergeIntoRequest($request);
-
         $validated = $request->validate([
             'firstname' => 'required|string|max:255',
             'lastname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
-            'employee_id' => 'required|string|max:255|unique:pending_employees,employee_id',
+            'middle_initial' => 'nullable|string|max:16',
+            'employee_id' => 'required|string|max:255|unique:library_pending_employees,employee_id',
             'designation' => 'required|string|max:255',
             'program' => 'required|string|max:64',
             'year_start_work' => 'required|string|max:16',
@@ -95,33 +98,44 @@ class PendingEmployeeController extends Controller
 
         PendingEmployee::create($validated);
 
-        \App\Services\AdminActivityLogger::patronRegistration(
+        $name = trim(($validated['lastname'] ?? '').', '.($validated['firstname'] ?? ''), ' ,');
+        app(AdminActivityLogger::class)->patronRegistration(
             'employee',
-            "{$validated['lastname']}, {$validated['firstname']}",
-            $validated['employee_id'],
+            $name !== '' ? $name : 'Employee',
+            (string) ($validated['employee_id'] ?? ''),
         );
 
-        return redirect()
-            ->route('patron.register')
+        return back()
+            ->with('auth_modal', 'register')
+            ->with('auth_service', 'library')
+            ->with('auth_type', 'employee')
             ->with('success', 'Faculty & staff registration submitted. Please wait for library approval.');
     }
 
-    public function approve($id)
+    public function approve($id, AdminActivityLogger $activities)
     {
         DB::beginTransaction();
 
         try {
             $pending = PendingEmployee::findOrFail($id);
 
-            $newQr = PatronQrCode::nextEmployee();
+            $lastEmployee = Employee::orderByDesc('id')->first();
+            $lastQr = $lastEmployee?->qrcode;
+            $nextNumber = 1;
 
-            Employee::create([
+            if ($lastQr && str_starts_with($lastQr, 'E-')) {
+                $nextNumber = (int) substr($lastQr, 2) + 1;
+            }
+
+            $newQr = 'E-'.str_pad((string) $nextNumber, 8, '0', STR_PAD_LEFT);
+
+            $employee = Employee::create([
                 'employee_id' => $pending->employee_id,
                 'formal_picture' => $pending->formal_picture,
                 'department' => $pending->department,
                 'firstname' => $pending->firstname,
                 'lastname' => $pending->lastname,
-                'middle_initial' => MiddleInitial::normalize($pending->middle_initial),
+                'middle_initial' => $pending->middle_initial,
                 'position' => $pending->position,
                 'designation' => $pending->designation ?? $pending->position,
                 'program' => $pending->program,
@@ -146,16 +160,9 @@ class PendingEmployeeController extends Controller
             ]);
 
             $pending->delete();
+            $activities->log('library', 'patron.approved', 'Library employee approved', $employee->employee_id, $employee);
 
             DB::commit();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_PATRON,
-                'Pending faculty/staff approved',
-                "{$pending->lastname}, {$pending->firstname} ({$pending->employee_id})",
-                route('employees.index'),
-                'patron',
-            );
 
             return back()->with('success', 'Faculty & staff approved and added to the directory.');
         } catch (\Throwable $e) {
@@ -165,19 +172,12 @@ class PendingEmployeeController extends Controller
         }
     }
 
-    public function reject($id)
+    public function reject($id, AdminActivityLogger $activities)
     {
         $pending = PendingEmployee::findOrFail($id);
-        $label = "{$pending->lastname}, {$pending->firstname} ({$pending->employee_id})";
+        $employeeId = $pending->employee_id;
         $pending->delete();
-
-        \App\Services\AdminActivityLogger::staff(
-            \App\Models\AdminActivity::TYPE_PATRON,
-            'Pending faculty/staff rejected',
-            $label,
-            route('pending.employees'),
-            'patron',
-        );
+        $activities->log('library', 'patron.rejected', 'Library employee rejected', $employeeId);
 
         return back()->with('success', 'Registration rejected.');
     }

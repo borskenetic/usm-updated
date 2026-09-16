@@ -66,21 +66,6 @@ function addToCart() {
         return;
     }
 
-    if (window.selectedBook.reserved) {
-        showToast("This copy is for room use only and cannot be added to cart.", "error");
-        return;
-    }
-
-    if (window.selectedBook.patron_hold) {
-        showToast("This copy is reserved for another patron.", "error");
-        return;
-    }
-
-    if (window.selectedBook.availability && window.selectedBook.availability !== 'Available') {
-        showToast("This copy is not available.", "error");
-        return;
-    }
-
     if (window.cart.length >= 5) {
         showToast("Maximum of 5 books allowed.", "error");
         return;
@@ -153,49 +138,37 @@ function confirmCopyCheckout() {
         return;
     }
 
-    const submitCheckout = (loanTerms) => {
-        const payload = {
+    fetch(window.CHECKOUT_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': window.CSRF_TOKEN,
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({
             student_id: studentId,
             book_id: copyId,
-        };
-        if (loanTerms?.due_date) payload.due_date = loanTerms.due_date;
-        if (loanTerms?.loan_duration_days) payload.loan_duration_days = loanTerms.loan_duration_days;
-
-        fetch(window.CHECKOUT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': window.CSRF_TOKEN,
-                Accept: 'application/json',
-            },
-            body: JSON.stringify(payload),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) {
-                    showToast('Checkout successful!', 'success');
-                    const modalEl = document.getElementById('studentCheckoutModal');
-                    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                        bootstrap.Modal.getInstance(modalEl)?.hide();
-                    }
-                    setTimeout(() => window.location.reload(), 600);
-                } else {
-                    const msg = data.message || 'Checkout failed.';
-                    if (err) {
-                        err.textContent = msg;
-                        err.classList.remove('d-none');
-                    }
-                    showToast(msg, 'error');
+        }),
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            if (data.success) {
+                showToast('Checkout successful!', 'success');
+                const modalEl = document.getElementById('studentCheckoutModal');
+                if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    bootstrap.Modal.getInstance(modalEl)?.hide();
                 }
-            })
-            .catch(() => showToast('Server error occurred.', 'error'));
-    };
-
-    const proceed = typeof promptLoanTerms === 'function'
-        ? promptLoanTerms()
-        : Promise.resolve({});
-
-    proceed.then(submitCheckout);
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                const msg = data.message || 'Checkout failed.';
+                if (err) {
+                    err.textContent = msg;
+                    err.classList.remove('d-none');
+                }
+                showToast(msg, 'error');
+            }
+        })
+        .catch(() => showToast('Server error occurred.', 'error'));
 }
 
 /* =========================================

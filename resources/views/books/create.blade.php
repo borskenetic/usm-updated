@@ -1,4 +1,4 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/books/create.css') }}">
@@ -104,7 +104,6 @@
                     </p>
                     <div class="row g-3">
                         @include('books.partials.catalog_curriculum_field')
-                        @include('books.partials.catalog_reserved_field')
                         <div class="col-12">
                             <label class="form-label catalog-field-label">Program(s)</label>
                             <div id="program-container" class="program-stack">
@@ -179,6 +178,6 @@
 @include('books.partials.catalog_tabs_script', ['formId' => 'addBookForm'])
 @include('books.partials.catalog_courses_script')
 @include('books.partials.catalog_programs_script')
-@include('books.partials.catalog_multicopy_script', ['formId' => 'addBookForm'])
+@include('books.partials.catalog_multicopy_script')
 @include('books.partials.catalog_marc_pickers_script')
 @endsection

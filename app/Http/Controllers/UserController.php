@@ -1,25 +1,21 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Support\PerPage;
-use App\Support\RespondsWithHydratablePartial;
-use Illuminate\Http\Request;
 use App\Models\User;
-use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    use RespondsWithHydratablePartial;
-
     public function create()
     {
         // Show the createuser form
         return view('accounts.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AdminActivityLogger $activities)
     {
         // Validate input
         $validated = $request->validate([
@@ -27,7 +23,7 @@ class UserController extends Controller
             'fname' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:6',
-            'role' => 'required|in:admin,staff,faculty,student',
+            'role' => 'required|in:super_admin,library_admin,library_staff,attendance_admin,attendance_staff',
         ]);
 
         // Create user
@@ -37,84 +33,61 @@ class UserController extends Controller
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
+            'is_active' => true,
         ]);
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_USER,
-            'User account created',
-            "{$user->fullName()} ({$user->role})",
-            route('users.edit', $user->id),
-            'patron',
-            $user,
-        );
+        $user->syncRoles([$validated['role']]);
+        $activities->log('super-admin', 'staff.created', 'Staff account created', $user->email, $user);
 
         return redirect()->route('users.create')->with('success', 'User account created successfully!');
     }
-    
+
     // show user
-   public function index(Request $request)
+    public function index()
     {
-        $users = User::orderBy('lname')->orderBy('fname')
-            ->paginate(PerPage::resolve($request, 25))
-            ->withQueryString();
+        $users = User::where('role', '!=', 'developer')->orderBy('lname')->orderBy('fname')->get();
 
-        $roleCounts = User::query()
-            ->selectRaw('role, COUNT(*) as total')
-            ->groupBy('role')
-            ->pluck('total', 'role');
-
-        return $this->hydratableResponse(
-            $request,
-            'accounts.index',
-            'accounts.partials.list-table',
-            compact('users', 'roleCounts'),
-        );
+        return view('accounts.index', compact('users'));
     }
 
     public function edit($id)
     {
         $user = User::findOrFail($id);
+        abort_if($this->isDeveloperAccount($user), 403);
+
         return view('accounts.edit', compact('user'));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, AdminActivityLogger $activities)
     {
         $request->validate([
             'fname' => 'required|string',
             'lname' => 'required|string',
             'email' => 'required|email',
-            'role' => 'required|in:admin,staff,faculty,student',
+            'role' => 'required|in:super_admin,library_admin,library_staff,attendance_admin,attendance_staff',
         ]);
 
         $user = User::findOrFail($id);
+        abort_if($this->isDeveloperAccount($user), 403);
         $user->update($request->only(['fname', 'lname', 'email', 'role']));
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_USER,
-            'User account updated',
-            "{$user->fullName()} ({$user->role})",
-            route('users.edit', $user->id),
-            'patron',
-            $user,
-        );
+        $user->syncRoles([$request->string('role')->toString()]);
+        $activities->log('super-admin', 'staff.updated', 'Staff account updated', $user->email, $user);
 
         return redirect()->route('users.index')->with('success', 'User updated successfully!');
     }
 
-    public function destroy($id)
+    public function destroy($id, AdminActivityLogger $activities)
     {
         $user = User::findOrFail($id);
-        $label = "{$user->fullName()} ({$user->email})";
+        abort_if($this->isDeveloperAccount($user), 403);
+        $email = $user->email;
         $user->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_USER,
-            'User account deleted',
-            $label,
-            route('users.index'),
-            'patron',
-        );
+        $activities->log('super-admin', 'staff.deleted', 'Staff account deleted', $email);
 
         return redirect()->route('users.index')->with('success', 'User deleted successfully!');
+    }
+
+    private function isDeveloperAccount(User $user): bool
+    {
+        return $user->hasRole('developer') || $user->getRawOriginal('role') === 'developer';
     }
 }

@@ -4,9 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Book;
 use App\Models\Program;
-use App\Support\PublicStoragePublisher;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Storage;
 
 class BookSampleSeeder extends Seeder
 {
@@ -14,21 +12,6 @@ class BookSampleSeeder extends Seeder
     {
         $library = 'Academic Library';
         $section = 'Main stacks';
-
-        $sampleCoverPath = 'covers/opac-seed-cover.svg';
-        Storage::disk('public')->put($sampleCoverPath, <<<'SVG'
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">
-  <defs><linearGradient id="cover" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a2540"/><stop offset="1" stop-color="#2a7355"/></linearGradient></defs>
-  <rect width="600" height="900" rx="24" fill="url(#cover)"/>
-  <path d="M72 92h456M72 808h456" stroke="#f0a526" stroke-width="8"/>
-  <path d="M190 294h220v250H190c-39 0-70 31-70 70V364c0-39 31-70 70-70Z" fill="none" stroke="#fff" stroke-width="18"/>
-  <path d="M120 574c0-39 31-70 70-70h220" fill="none" stroke="#fff" stroke-width="18"/>
-  <text x="300" y="170" fill="#fff" font-family="Arial, sans-serif" font-size="30" font-weight="700" text-anchor="middle">PANTAS LIBRARY</text>
-  <text x="300" y="690" fill="#fff" font-family="Georgia, serif" font-size="48" font-weight="700" text-anchor="middle">Sample Book</text>
-  <text x="300" y="744" fill="#dbeafe" font-family="Arial, sans-serif" font-size="25" text-anchor="middle">with cover image</text>
-</svg>
-SVG);
-        $sampleCoverPath = PublicStoragePublisher::publish($sampleCoverPath);
 
         /**
          * Each entry is one physical copy. Duplicate titles share bibliographic fields.
@@ -322,40 +305,6 @@ SVG);
                 'course' => 'Art Appreciation',
                 'year' => '2nd Year',
             ],
-            [
-                'accession_no' => 'GG-2024-0019',
-                'rfid' => 'RFID-GG-00019',
-                'barcode' => 'BC-GG-00019',
-                'title_statement' => 'OPAC Sample Book with Cover',
-                'main_author' => 'PANTAS Library',
-                'publisher' => 'PANTAS Press',
-                'pub_year' => '2026',
-                'isbn' => '9780000000019',
-                'call_number' => 'Z711 .P36 2026',
-                'content_type' => 'Printed',
-                'curriculum' => 'gen ed',
-                'program_codes' => ['BSCS', 'BSIT'],
-                'course' => 'Library Orientation',
-                'year' => '1st Year',
-                'cover_image' => $sampleCoverPath,
-            ],
-            [
-                'accession_no' => 'GG-2024-0020',
-                'rfid' => 'RFID-GG-00020',
-                'barcode' => 'BC-GG-00020',
-                'title_statement' => 'OPAC Sample Book without Cover',
-                'main_author' => 'PANTAS Library',
-                'publisher' => 'PANTAS Press',
-                'pub_year' => '2026',
-                'isbn' => '9780000000020',
-                'call_number' => 'Z711 .P37 2026',
-                'content_type' => 'Printed',
-                'curriculum' => 'gen ed',
-                'program_codes' => ['BSCS', 'BSIT'],
-                'course' => 'Library Orientation',
-                'year' => '1st Year',
-                'cover_image' => null,
-            ],
         ];
 
         $created = 0;
@@ -389,7 +338,7 @@ SVG);
         $withPrograms = Book::whereHas('programs')->count();
         $withCourse = Book::whereNotNull('course')->where('course', '!=', '')->count();
 
-        $this->command?->info("{$created} book copies seeded ({$titleCount} unique titles). Accession GG-2024-0001 through GG-2024-0020.");
+        $this->command?->info("{$created} book copies seeded ({$titleCount} unique titles). Accession GG-2024-0001 … GG-2024-0018.");
         $this->command?->info("{$withPrograms} copies linked to programs; {$withCourse} copies have a course set.");
     }
 }

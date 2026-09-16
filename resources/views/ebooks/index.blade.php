@@ -1,4 +1,4 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/ebooks/ebooks.css') }}">
@@ -172,7 +172,7 @@
                 </div>
 
                 <div class="mt-3 d-flex justify-content-center">
-                    @include('layouts.partials.pagination_bar', ['paginator' => $ebooks])
+                    {{ $ebooks->appends(request()->query())->links('pagination::bootstrap-5') }}
                 </div>
             @else
                 <div class="ebooks-card ebooks-empty">

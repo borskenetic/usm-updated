@@ -1,58 +1,39 @@
-@extends('layouts.auth')
-
-@section('title', 'Choose new password')
-
-@section('content')
-    <div class="auth-page__hero">
-        <h1>Set a new password</h1>
-        <p>Choose a strong password for your account. You will sign in with it on the next screen.</p>
-    </div>
-
-    <form method="POST" action="{{ route('password.store') }}" novalidate>
+<x-guest-layout>
+    <form method="POST" action="{{ route('password.store') }}">
         @csrf
 
+        <!-- Password Reset Token -->
         <input type="hidden" name="token" value="{{ $request->route('token') }}">
 
-        <div class="auth-page__field">
-            <label for="email">Email address</label>
-            <input type="email"
-                   name="email"
-                   id="email"
-                   class="form-control @error('email') is-invalid @enderror"
-                   value="{{ old('email', $request->email) }}"
-                   required
-                   autofocus
-                   autocomplete="username">
-            @error('email')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-            @enderror
+        <!-- Email Address -->
+        <div>
+            <x-input-label for="email" :value="__('Email')" />
+            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email', $request->email)" required autofocus autocomplete="username" />
+            <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <div class="auth-page__field">
-            <label for="password">New password</label>
-            <input type="password"
-                   name="password"
-                   id="password"
-                   class="form-control @error('password') is-invalid @enderror"
-                   required
-                   autocomplete="new-password">
-            @error('password')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-            @enderror
+        <!-- Password -->
+        <div class="mt-4">
+            <x-input-label for="password" :value="__('Password')" />
+            <x-text-input id="password" class="block mt-1 w-full" type="password" name="password" required autocomplete="new-password" />
+            <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <div class="auth-page__field">
-            <label for="password_confirmation">Confirm password</label>
-            <input type="password"
-                   name="password_confirmation"
-                   id="password_confirmation"
-                   class="form-control"
-                   required
-                   autocomplete="new-password">
+        <!-- Confirm Password -->
+        <div class="mt-4">
+            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
+
+            <x-text-input id="password_confirmation" class="block mt-1 w-full"
+                                type="password"
+                                name="password_confirmation" required autocomplete="new-password" />
+
+            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <button type="submit" class="auth-page__btn auth-page__btn--primary">Update password</button>
+        <div class="flex items-center justify-end mt-4">
+            <x-primary-button>
+                {{ __('Reset Password') }}
+            </x-primary-button>
+        </div>
     </form>
-
-    <a href="{{ route('login') }}" class="auth-page__btn auth-page__btn--outline">← Back to sign in</a>
-@endsection
+</x-guest-layout>

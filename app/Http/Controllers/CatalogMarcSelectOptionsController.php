@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\MarcField;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -70,15 +68,6 @@ class CatalogMarcSelectOptionsController extends Controller
             $marc->save();
         }
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            $exists ? 'Catalog option unchanged' : 'Catalog dropdown option added',
-            "{$data['tag']}{$subfield}: {$option}",
-            route('admin.catalog_select_options.index'),
-            'book',
-            $marc,
-        );
-
         return redirect()
             ->route('admin.catalog_select_options.index', ['field' => $data['tag'] . ($subfield ?? '')])
             ->with('success', $exists ? 'That option already exists.' : "Added “{$option}”.");
@@ -112,15 +101,6 @@ class CatalogMarcSelectOptionsController extends Controller
 
         $marc->options = $options ?: null;
         $marc->save();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'Catalog dropdown option removed',
-            "{$data['tag']}{$subfield}: {$remove}",
-            route('admin.catalog_select_options.index'),
-            'book',
-            $marc,
-        );
 
         return redirect()
             ->route('admin.catalog_select_options.index', ['field' => $data['tag'] . ($subfield ?? '')])

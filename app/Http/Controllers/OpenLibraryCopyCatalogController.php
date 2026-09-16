@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use App\Services\GoogleBooksService;
 use App\Services\OpenLibraryService;
 use App\Models\Book;
-use App\Services\AdminActivityLogger;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -248,9 +247,7 @@ class OpenLibraryCopyCatalogController extends Controller
         $data['cover_image'] = $coverPath;
     
         // Save to DB
-        $book = \App\Models\Book::create($data);
-
-        AdminActivityLogger::catalog('created', $book);
+        \App\Models\Book::create($data);
     
         return redirect()
         ->back()

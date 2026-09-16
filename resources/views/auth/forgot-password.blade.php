@@ -1,38 +1,25 @@
-@extends('layouts.auth')
-
-@section('title', 'Forgot password')
-
-@section('content')
-    <div class="auth-page__hero">
-        <h1>Reset your password</h1>
-        <p>Enter the email on your staff account. We will send a secure link to choose a new password.</p>
+<x-guest-layout>
+    <div class="mb-4 text-sm text-gray-600">
+        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
     </div>
 
-    @if(session('status'))
-        <div class="alert alert-success auth-page__alert">{{ session('status') }}</div>
-    @endif
+    <!-- Session Status -->
+    <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('password.email') }}" novalidate>
+    <form method="POST" action="{{ route('password.email') }}">
         @csrf
 
-        <div class="auth-page__field">
-            <label for="email">Email address</label>
-            <input type="email"
-                   name="email"
-                   id="email"
-                   class="form-control @error('email') is-invalid @enderror"
-                   value="{{ old('email') }}"
-                   placeholder="you@school.edu"
-                   required
-                   autofocus
-                   autocomplete="username">
-            @error('email')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-            @enderror
+        <!-- Email Address -->
+        <div>
+            <x-input-label for="email" :value="__('Email')" />
+            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus />
+            <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <button type="submit" class="auth-page__btn auth-page__btn--primary">Email reset link</button>
+        <div class="flex items-center justify-end mt-4">
+            <x-primary-button>
+                {{ __('Email Password Reset Link') }}
+            </x-primary-button>
+        </div>
     </form>
-
-    <a href="{{ route('login') }}" class="auth-page__btn auth-page__btn--outline">← Back to sign in</a>
-@endsection
+</x-guest-layout>

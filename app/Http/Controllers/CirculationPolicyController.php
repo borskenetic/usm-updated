@@ -1,21 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\FineSetting;
 use App\Models\Setting;
-use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
-class CirculationPolicyController extends Controller
+final class CirculationPolicyController extends Controller
 {
-    public function edit()
+    public function edit(): View
     {
-        $fineSettings = FineSetting::latest('created_at')->first();
-        $termsBase = $fineSettings ?? new FineSetting();
-        $studentTerms = $termsBase->patronTerms(false);
-        $employeeTerms = $termsBase->patronTerms(true);
+        $fineSettings = FineSetting::current();
+        $termsBase = $fineSettings ?? new FineSetting(FineSetting::defaultAttributes());
 
         return view('admin.circulation_policy', [
             'studentMax' => Setting::maxLoansForStudents(),
@@ -25,12 +26,12 @@ class CirculationPolicyController extends Controller
             'reborrowCooldownDays' => Setting::reborrowCooldownDays(),
             'reservationHoldDays' => Setting::reservationHoldDays(),
             'fineSettings' => $fineSettings,
-            'studentTerms' => $studentTerms,
-            'employeeTerms' => $employeeTerms,
+            'studentTerms' => $termsBase->patronTerms(false),
+            'employeeTerms' => $termsBase->patronTerms(true),
         ]);
     }
 
-    public function update(Request $request)
+    public function update(Request $request, AdminActivityLogger $activities): RedirectResponse
     {
         $employeeUnlimited = $request->input('employee_unlimited') === '1';
 
@@ -80,12 +81,17 @@ class CirculationPolicyController extends Controller
             'effective_from' => now(),
         ]);
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
+        FineSetting::clearCache();
+        \App\Models\BookLog::forgetCachedFineSettings();
+
+        $activities->log(
+            'library',
+            'settings.circulation_policy',
             'Circulation policy updated',
             'Borrow limits, renewals, and fine settings changed',
+            null,
             route('circulation.policy.edit'),
-            'circulation',
+            'bi-sliders',
         );
 
         return redirect()

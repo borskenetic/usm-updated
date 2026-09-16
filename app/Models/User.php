@@ -4,14 +4,17 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -24,9 +27,9 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'profile_picture',
-        'activity_last_seen_at',
-        'notification_last_seen_at',
+        'student_id',
+        'is_active',
+        'theme_preference',
     ];
 
     /**
@@ -48,29 +51,36 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'activity_last_seen_at' => 'datetime',
-            'notification_last_seen_at' => 'datetime',
+            'is_active' => 'boolean',
             'password' => 'hashed',
+            'theme_preference' => 'string',
         ];
     }
 
-    public function activities(): HasMany
+    public function getFullNameAttribute(): string
     {
-        return $this->hasMany(AdminActivity::class);
+        return trim((string) $this->fname.' '.(string) $this->lname);
     }
 
-    public function fullName(): string
+    public function getNameAttribute(): string
     {
-        return trim("{$this->fname} {$this->lname}");
+        return $this->full_name !== '' ? $this->full_name : (string) $this->email;
     }
 
-    public function initials(): string
+    public function getRoleAttribute(?string $value): ?string
     {
-        return strtoupper(mb_substr((string) $this->fname, 0, 1).mb_substr((string) $this->lname, 0, 1));
+        $spatieRole = $this->roles->first()?->name;
+
+        return $spatieRole ?: $value;
     }
 
-    public function profilePictureUrl(): ?string
+    public function student(): BelongsTo
     {
-        return $this->profile_picture ? asset($this->profile_picture) : null;
+        return $this->belongsTo(Student::class);
+    }
+
+    public function brandingUpdates(): HasMany
+    {
+        return $this->hasMany(BrandingSetting::class, 'updated_by');
     }
 }

@@ -1,0 +1,36 @@
+<?php
+
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeveloperBrandingController;
+use App\Http\Controllers\DeveloperLoginModalController;
+use App\Http\Controllers\DeveloperRegisterModalController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth', 'developer'])->group(function (): void {
+    Route::get('/developer/dashboard', [DashboardController::class, 'developer'])
+        ->name('dashboard.developer');
+    Route::get('/developer/branding', [DeveloperBrandingController::class, 'edit'])
+        ->name('developer.branding.edit');
+    Route::put('/developer/branding', [DeveloperBrandingController::class, 'update'])
+        ->name('developer.branding.update');
+    Route::post('/developer/branding/restore', [DeveloperBrandingController::class, 'restore'])
+        ->name('developer.branding.restore');
+    Route::get('/developer/branding/activity', [DeveloperBrandingController::class, 'activity'])
+        ->name('developer.branding.activity');
+    Route::get('/developer/branding/versions', [DeveloperBrandingController::class, 'versions'])
+        ->name('developer.branding.versions');
+    Route::post('/developer/branding/versions/{version}/restore', [DeveloperBrandingController::class, 'restoreVersion'])
+        ->name('developer.branding.restore-version');
+    Route::get('/developer/login-modal', [DeveloperLoginModalController::class, 'edit'])
+        ->name('developer.login-modal.edit');
+    Route::put('/developer/login-modal', [DeveloperLoginModalController::class, 'update'])
+        ->name('developer.login-modal.update');
+    Route::post('/developer/login-modal/restore', [DeveloperLoginModalController::class, 'restore'])
+        ->name('developer.login-modal.restore');
+    Route::get('/developer/register-modal', [DeveloperRegisterModalController::class, 'edit'])
+        ->name('developer.register-modal.edit');
+    Route::put('/developer/register-modal', [DeveloperRegisterModalController::class, 'update'])
+        ->name('developer.register-modal.update');
+    Route::post('/developer/register-modal/restore', [DeveloperRegisterModalController::class, 'restore'])
+        ->name('developer.register-modal.restore');
+});

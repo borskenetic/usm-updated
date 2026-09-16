@@ -1,140 +1,133 @@
+function openDeleteModal(courseId, courseCode) {
+    const form = document.getElementById('deleteForm');
+    form.action = `/prospectus/course/${courseId}`;
+    document.getElementById('deleteMessage').innerText =
+        `Are you sure you want to delete course "${courseCode}"?`;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+function openEditModal(courseId, code, name) {
+    const form = document.getElementById('editForm');
+    form.action = `/prospectus/course/${courseId}`;
+    document.getElementById('editCourseCode').value = code;
+    document.getElementById('editCourseName').value = name;
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+function courseCountLabel(count) {
+    return `${count} ${count === 1 ? 'course' : 'courses'}`;
+}
+
+function bumpStat(name, delta) {
+    const el = document.querySelector(`[data-stat="${name}"]`);
+    if (!el) return;
+    const next = Math.max(0, (parseInt(el.textContent.replace(/,/g, ''), 10) || 0) + delta);
+    el.textContent = next.toLocaleString();
+}
+
+function refreshYearCount(yearId) {
+    const list = document.getElementById(`year-${yearId}-list`);
+    const badge = document.querySelector(`[data-year-course-count="${yearId}"]`);
+    if (!list || !badge) return;
+    const count = list.querySelectorAll('.prospectus-course-item').length;
+    badge.textContent = courseCountLabel(count);
+}
+
+function refreshProgramCount(programId) {
+    const card = document.getElementById(`program-card-${programId}`);
+    const counter = document.querySelector(`[data-program-course-count="${programId}"]`);
+    const label = document.querySelector(`[data-program-course-label="${programId}"]`);
+    if (!card || !counter) return;
+    const count = card.querySelectorAll('.prospectus-course-item').length;
+    counter.textContent = String(count);
+    if (label) label.textContent = count === 1 ? 'course' : 'courses';
+}
+
+function ensureEmptyState(list) {
+    if (!list) return;
+    if (list.querySelectorAll('.prospectus-course-item').length === 0 && !list.querySelector('.prospectus-course-empty')) {
+        list.insertAdjacentHTML('beforeend', '<li class="prospectus-course-empty">No courses yet.</li>');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    const page = document.getElementById('prospectus-page');
-    if (!page) return;
+    document.querySelectorAll('#prospectus-page [data-prospectus-panel]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sel = btn.getAttribute('data-prospectus-panel');
+            const panel = sel ? document.querySelector(sel) : null;
+            if (!panel) return;
 
-    const courseEditModalEl = document.getElementById('courseEditModal');
-    const courseDeleteModalEl = document.getElementById('courseDeleteModal');
-    const programEditModalEl = document.getElementById('programEditModal');
-    const programDeleteModalEl = document.getElementById('programDeleteModal');
+            const card = panel.closest('.prospectus-program');
+            const willCollapse = !panel.classList.contains('hidden') && !(card && card.classList.contains('is-collapsed'));
 
-    const courseEditModal = courseEditModalEl ? bootstrap.Modal.getOrCreateInstance(courseEditModalEl) : null;
-    const courseDeleteModal = courseDeleteModalEl ? bootstrap.Modal.getOrCreateInstance(courseDeleteModalEl) : null;
-    const programEditModal = programEditModalEl ? bootstrap.Modal.getOrCreateInstance(programEditModalEl) : null;
-    const programDeleteModal = programDeleteModalEl ? bootstrap.Modal.getOrCreateInstance(programDeleteModalEl) : null;
+            if (card) {
+                card.classList.toggle('is-collapsed', willCollapse);
+            }
+            panel.classList.toggle('hidden', willCollapse);
+            btn.setAttribute('aria-expanded', willCollapse ? 'false' : 'true');
+            btn.textContent = willCollapse
+                ? (btn.getAttribute('data-expand-label') || 'Expand')
+                : (btn.getAttribute('data-collapse-label') || 'Collapse');
+        });
+    });
 
     const editForm = document.getElementById('editForm');
     const deleteForm = document.getElementById('deleteForm');
-    const editProgramForm = document.getElementById('editProgramForm');
-    const deleteProgramForm = document.getElementById('deleteProgramForm');
 
     function toggleLoading(button, loading) {
         if (!button) return;
-        button.classList.toggle('is-loading', loading);
-        button.disabled = loading;
+        const spinner = button.querySelector('.spinner');
+        const text = button.querySelector('.btn-text');
+        if (loading) {
+            if (spinner) spinner.classList.remove('hidden');
+            if (text) text.classList.add('hidden');
+            button.disabled = true;
+        } else {
+            if (spinner) spinner.classList.add('hidden');
+            if (text) text.classList.remove('hidden');
+            button.disabled = false;
+        }
     }
 
     function showToast(message, type = 'success') {
-        const container = document.getElementById('prog-mgr-toast-container');
+        const container = document.getElementById('toastContainer');
         if (!container) return;
 
         const toast = document.createElement('div');
-        toast.className = `prog-mgr__toast prog-mgr__toast--${type}`;
-        toast.innerHTML = `<span>${message}</span><button type="button" aria-label="Dismiss">&times;</button>`;
+        toast.className = `prospectus-toast prospectus-toast--${type === 'success' ? 'success' : 'error'} animate-slide-in`;
+        toast.innerHTML = `
+            <span>${message}</span>
+            <button type="button" aria-label="Dismiss">×</button>
+        `;
+
         toast.querySelector('button').addEventListener('click', () => toast.remove());
+        setTimeout(() => {
+            toast.classList.remove('animate-slide-in');
+            toast.classList.add('animate-fade-out');
+            setTimeout(() => toast.remove(), 450);
+        }, 2000);
+
         container.appendChild(toast);
-
-        setTimeout(() => toast.remove(), 3200);
     }
-
-    function updateToggleLabels() {
-        page.querySelectorAll('[data-action="toggle-program"]').forEach((btn) => {
-            const programId = btn.getAttribute('data-program-id');
-            const card = document.getElementById(`program-card-${programId}`);
-            const label = btn.querySelector('[data-toggle-label]');
-            if (label && card) {
-                label.textContent = card.classList.contains('is-expanded') ? 'Collapse' : 'Expand';
-            }
-        });
-    }
-
-    function refreshYearCount(yearId) {
-        const list = document.getElementById(`year-${yearId}`);
-        const block = document.getElementById(`year-block-${yearId}`);
-        if (!list || !block) return;
-
-        const count = list.querySelectorAll('.prog-mgr__course').length;
-        const badge = block.querySelector('.prog-mgr__year-count');
-        if (badge) {
-            badge.textContent = `${count} ${count === 1 ? 'course' : 'courses'}`;
-        }
-    }
-
-    function refreshProgramMeta(programId) {
-        const card = document.getElementById(`program-card-${programId}`);
-        if (!card) return;
-
-        const courseCount = card.querySelectorAll('.prog-mgr__course').length;
-        const meta = card.querySelector('.prog-mgr__program-meta');
-        const years = card.querySelectorAll('.prog-mgr__year').length;
-        if (meta) {
-            meta.textContent = `${years} ${years === 1 ? 'year' : 'years'} · ${courseCount} ${courseCount === 1 ? 'course' : 'courses'}`;
-        }
-    }
-
-    page.addEventListener('click', (event) => {
-        const btn = event.target.closest('[data-action]');
-        if (!btn || !page.contains(btn)) return;
-
-        const action = btn.getAttribute('data-action');
-
-        if (action === 'toggle-program') {
-            const programId = btn.getAttribute('data-program-id');
-            const card = document.getElementById(`program-card-${programId}`);
-            if (card) {
-                card.classList.toggle('is-expanded');
-                updateToggleLabels();
-            }
-            return;
-        }
-
-        if (action === 'edit-course' && editForm && courseEditModal) {
-            const courseId = btn.getAttribute('data-course-id');
-            editForm.action = `/prospectus/course/${courseId}`;
-            document.getElementById('editCourseCode').value = btn.getAttribute('data-course-code') || '';
-            document.getElementById('editCourseName').value = btn.getAttribute('data-course-name') || '';
-            courseEditModal.show();
-            return;
-        }
-
-        if (action === 'delete-course' && deleteForm && courseDeleteModal) {
-            const courseId = btn.getAttribute('data-course-id');
-            const courseCode = btn.getAttribute('data-course-code') || 'this course';
-            deleteForm.action = `/prospectus/course/${courseId}`;
-            document.getElementById('deleteMessage').textContent =
-                `Are you sure you want to delete "${courseCode}"?`;
-            courseDeleteModal.show();
-            return;
-        }
-
-        if (action === 'edit-program' && editProgramForm && programEditModal) {
-            const programId = btn.getAttribute('data-program-id');
-            editProgramForm.action = `/prospectus/program/${programId}`;
-            document.getElementById('editProgramCode').value = btn.getAttribute('data-program-code') || '';
-            document.getElementById('editProgramName').value = btn.getAttribute('data-program-name') || '';
-            programEditModal.show();
-            return;
-        }
-
-        if (action === 'delete-program' && deleteProgramForm && programDeleteModal) {
-            const programId = btn.getAttribute('data-program-id');
-            const programCode = btn.getAttribute('data-program-code') || 'this program';
-            deleteProgramForm.action = `/prospectus/program/${programId}`;
-            document.getElementById('deleteProgramCode').textContent = programCode;
-            programDeleteModal.show();
-        }
-    });
-
-    updateToggleLabels();
 
     if (editForm) {
-        editForm.addEventListener('submit', async (e) => {
+        editForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const btn = document.getElementById('editBtn');
             toggleLoading(btn, true);
 
-            const response = await fetch(editForm.action, {
+            const response = await fetch(this.action, {
                 method: 'POST',
-                body: new FormData(editForm),
+                body: new FormData(this),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
@@ -142,83 +135,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 const updatedItem = await response.text();
-                const courseId = editForm.action.split('/').pop();
-                const row = document.getElementById(`course-${courseId}`);
-                if (row) {
-                    const yearList = row.closest('.prog-mgr__course-list');
-                    row.outerHTML = updatedItem;
-                    if (yearList) {
-                        refreshYearCount(yearList.getAttribute('data-year-id'));
-                        const programCard = yearList.closest('.prog-mgr__program');
-                        if (programCard) {
-                            refreshProgramMeta(programCard.id.replace('program-card-', ''));
-                        }
-                    }
-                }
-                courseEditModal?.hide();
+                const courseId = this.action.split('/').pop();
+                const li = document.getElementById('course-' + courseId);
+                if (li) li.outerHTML = updatedItem;
+                closeEditModal();
                 showToast('Course updated');
             } else {
-                showToast('Could not update course', 'error');
+                showToast('Error updating course', 'error');
             }
         });
     }
 
     if (deleteForm) {
-        deleteForm.addEventListener('submit', async (e) => {
+        deleteForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const btn = document.getElementById('deleteBtn');
             toggleLoading(btn, true);
 
-            const response = await fetch(deleteForm.action, {
+            const response = await fetch(this.action, {
                 method: 'POST',
-                body: new FormData(deleteForm),
+                body: new FormData(this),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
             toggleLoading(btn, false);
 
             if (response.ok) {
-                const courseId = deleteForm.action.split('/').pop();
-                const row = document.getElementById(`course-${courseId}`);
-                if (row) {
-                    const yearList = row.closest('.prog-mgr__course-list');
-                    const yearId = yearList?.getAttribute('data-year-id');
-                    row.remove();
-
-                    if (yearList && !yearList.querySelector('.prog-mgr__course')) {
-                        const empty = document.createElement('li');
-                        empty.className = 'prog-mgr__course-empty';
-                        empty.setAttribute('data-empty-row', '');
-                        empty.textContent = 'No courses yet.';
-                        yearList.appendChild(empty);
-                    }
-
-                    if (yearId) {
-                        refreshYearCount(yearId);
-                        const programCard = yearList?.closest('.prog-mgr__program');
-                        if (programCard) {
-                            refreshProgramMeta(programCard.id.replace('program-card-', ''));
-                        }
-                    }
-                }
-                courseDeleteModal?.hide();
+                const courseId = this.action.split('/').pop();
+                const li = document.getElementById('course-' + courseId);
+                const yearId = li?.dataset?.yearId;
+                const programId = li?.closest('[data-program-id]')?.getAttribute('data-program-id');
+                const list = li?.parentElement;
+                if (li) li.remove();
+                ensureEmptyState(list);
+                if (yearId) refreshYearCount(yearId);
+                if (programId) refreshProgramCount(programId);
+                bumpStat('courses', -1);
+                closeDeleteModal();
                 showToast('Course deleted');
             } else {
-                showToast('Could not delete course', 'error');
+                showToast('Error deleting course', 'error');
             }
         });
     }
 
-    page.querySelectorAll('.add-course-form').forEach((form) => {
-        form.addEventListener('submit', async (e) => {
+    document.querySelectorAll('.add-course-form').forEach((form) => {
+        form.addEventListener('submit', async function (e) {
             e.preventDefault();
-            const btn = form.querySelector('button[type="submit"]');
+            const btn = this.querySelector('button[type="submit"]');
             toggleLoading(btn, true);
 
-            const yearId = form.dataset.year;
-            const response = await fetch(form.action, {
+            const yearId = this.dataset.year;
+            const programId = this.dataset.program;
+            const response = await fetch(this.action, {
                 method: 'POST',
-                body: new FormData(form),
+                body: new FormData(this),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
@@ -226,34 +197,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 const newItem = await response.text();
-                const list = document.getElementById(`year-${yearId}`);
-                if (list) {
-                    const emptyMsg = list.querySelector('[data-empty-row]');
+                const ul = document.getElementById(`year-${yearId}-list`);
+                if (ul) {
+                    const emptyMsg = ul.querySelector('.prospectus-course-empty');
                     if (emptyMsg) emptyMsg.remove();
-                    list.insertAdjacentHTML('beforeend', newItem);
-                    refreshYearCount(yearId);
-                    const programCard = list.closest('.prog-mgr__program');
-                    if (programCard) {
-                        refreshProgramMeta(programCard.id.replace('program-card-', ''));
-                    }
+                    ul.insertAdjacentHTML('beforeend', newItem);
                 }
-                form.reset();
+                this.reset();
+                refreshYearCount(yearId);
+                if (programId) refreshProgramCount(programId);
+                bumpStat('courses', 1);
                 showToast('Course added');
             } else {
-                showToast('Could not add course', 'error');
+                showToast('Error adding course', 'error');
             }
         });
     });
 
+    window.openProgramEditModal = function (programId, programCode, programName) {
+        const modal = document.getElementById('editProgramModal');
+        const form = document.getElementById('editProgramForm');
+        form.action = `/prospectus/program/${programId}`;
+        document.getElementById('editProgramCode').value = programCode;
+        document.getElementById('editProgramName').value = programName;
+        modal.classList.remove('hidden');
+    };
+
+    window.closeProgramEditModal = function () {
+        document.getElementById('editProgramModal').classList.add('hidden');
+    };
+
+    const editProgramForm = document.getElementById('editProgramForm');
     if (editProgramForm) {
-        editProgramForm.addEventListener('submit', async (e) => {
+        editProgramForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const btn = document.getElementById('editProgramBtn');
             toggleLoading(btn, true);
 
-            const response = await fetch(editProgramForm.action, {
+            const response = await fetch(this.action, {
                 method: 'POST',
-                body: new FormData(editProgramForm),
+                body: new FormData(this),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
@@ -261,34 +244,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 const data = await response.json();
-                const codeEl = document.getElementById(`program-code-${data.id}`);
-                const nameEl = document.getElementById(`program-name-${data.id}`);
-                if (codeEl) codeEl.textContent = data.program_code;
+                const nameEl = document.getElementById('program-name-' + data.id);
                 if (nameEl) nameEl.textContent = data.program_name;
-
-                const editBtn = page.querySelector(`[data-action="edit-program"][data-program-id="${data.id}"]`);
-                if (editBtn) {
-                    editBtn.setAttribute('data-program-code', data.program_code);
-                    editBtn.setAttribute('data-program-name', data.program_name);
-                }
-
-                programEditModal?.hide();
+                const card = document.getElementById('program-card-' + data.id);
+                const badge = card?.querySelector('.prospectus-badge');
+                if (badge) badge.textContent = data.program_code;
+                closeProgramEditModal();
                 showToast('Program updated');
             } else {
-                showToast('Could not update program', 'error');
+                showToast('Error updating program', 'error');
             }
         });
     }
 
+    window.openProgramDeleteModal = function (programId, programCode) {
+        const modal = document.getElementById('deleteProgramModal');
+        const form = document.getElementById('deleteProgramForm');
+        form.action = `/prospectus/program/${programId}`;
+        document.getElementById('deleteProgramCode').textContent = programCode;
+        modal.classList.remove('hidden');
+    };
+
+    window.closeProgramDeleteModal = function () {
+        document.getElementById('deleteProgramModal').classList.add('hidden');
+    };
+
+    const deleteProgramForm = document.getElementById('deleteProgramForm');
     if (deleteProgramForm) {
-        deleteProgramForm.addEventListener('submit', async (e) => {
+        deleteProgramForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const btn = document.getElementById('deleteProgramBtn');
             toggleLoading(btn, true);
 
-            const response = await fetch(deleteProgramForm.action, {
+            const response = await fetch(this.action, {
                 method: 'POST',
-                body: new FormData(deleteProgramForm),
+                body: new FormData(this),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
@@ -296,19 +286,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 const data = await response.json();
-                const card = document.getElementById(`program-card-${data.id}`);
+                const card = document.getElementById('program-card-' + data.id);
+                const courseDelta = card ? -card.querySelectorAll('.prospectus-course-item').length : 0;
                 if (card) card.remove();
-                programDeleteModal?.hide();
+                bumpStat('programs', -1);
+                bumpStat('showing', -1);
+                if (courseDelta) bumpStat('courses', courseDelta);
+                closeProgramDeleteModal();
                 showToast('Program deleted');
-
-                if (!page.querySelector('.prog-mgr__program')) {
-                    const list = page.querySelector('.prog-mgr__programs');
-                    if (list) {
-                        list.innerHTML = '<div class="prog-mgr__empty"><p class="mb-0">No programs yet. Add your first program above.</p></div>';
-                    }
-                }
             } else {
-                showToast('Could not delete program', 'error');
+                showToast('Error deleting program', 'error');
             }
         });
     }

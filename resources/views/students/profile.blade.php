@@ -11,52 +11,6 @@
         <a href="{{ route('kiosk.scan') }}" class="btn btn-outline-secondary btn-sm">← Back to student lookup</a>
     </div>
 
-    @if($readyReservations->isNotEmpty())
-    <div class="alert alert-warning border-warning shadow-sm mb-4" role="alert">
-        <div class="d-flex align-items-start gap-2">
-            <span class="fs-4 lh-1" aria-hidden="true">🔔</span>
-            <div class="flex-grow-1">
-                <h2 class="h6 alert-heading mb-2">Reserved book{{ $readyReservations->count() > 1 ? 's' : '' }} ready for pickup</h2>
-                <ul class="mb-0 ps-3">
-                    @foreach($readyReservations as $reservation)
-                    <li class="mb-1">
-                        <strong>{{ $reservation->book?->title_statement ?? 'Untitled' }}</strong>
-                        @if($reservation->book?->barcode)
-                            <span class="text-muted small">({{ $reservation->book->barcode }})</span>
-                        @endif
-                        <span class="d-block small text-muted">
-                            Pick up by {{ $reservation->expiresAt()->timezone('Asia/Manila')->format('M j, Y g:i A') }}
-                        </span>
-                    </li>
-                    @endforeach
-                </ul>
-                <p class="small mb-0 mt-2">Visit the circulation desk to check out your reserved copy before the hold expires.</p>
-            </div>
-        </div>
-    </div>
-    @endif
-
-    @if($pendingReservations->isNotEmpty())
-    <div class="alert alert-info border-info mb-4" role="status">
-        <h2 class="h6 alert-heading mb-2">Waiting for a copy</h2>
-        <ul class="mb-0 ps-3 small">
-            @foreach($pendingReservations as $reservation)
-            <li>
-                <strong>{{ $reservation->book?->title_statement ?? 'Untitled' }}</strong>
-                — reserved {{ $reservation->reserved_at?->timezone('Asia/Manila')->diffForHumans() }}.
-                You will be notified here (and by email if on file) when it is returned.
-            </li>
-            @endforeach
-        </ul>
-    </div>
-    @endif
-
-    @if(!$student->email)
-    <div class="alert alert-light border mb-4 py-2 small" role="note">
-        Add your email via <strong>Request edit</strong> to receive alerts when reserved books are ready.
-    </div>
-    @endif
-
     {{-- PROFILE --}}
     <div class="card mb-4">
         <div class="card-body d-flex flex-column flex-md-row align-items-center align-items-md-start">
@@ -75,9 +29,6 @@
             <div class="text-center text-md-start flex-grow-1">
                 <h4 class="mb-1">{{ $student->firstname }} {{ $student->lastname }}</h4>
                 <p class="mb-1 text-muted">ID: {{ $student->id_number ?? '—' }}</p>
-                @if($student->email)
-                <p class="mb-1 text-muted small">{{ $student->email }}</p>
-                @endif
                 <p class="mb-1">{{ $program?->program_name ?? 'Program not set' }}</p>
                 <p class="mb-3">{{ $student->year ?? '—' }}</p>
 
@@ -90,45 +41,6 @@
             </div>
         </div>
     </div>
-
-    {{-- OPAC RESERVATIONS --}}
-    @if($readyReservations->isNotEmpty() || $pendingReservations->isNotEmpty())
-    <div class="card mb-4">
-        <div class="card-header fw-semibold">OPAC reservations</div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Book</th>
-                            <th>Status</th>
-                            <th>Reserved</th>
-                            <th>Pickup by</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($readyReservations as $reservation)
-                        <tr class="table-warning">
-                            <td>{{ $reservation->book?->title_statement ?? '—' }}</td>
-                            <td><span class="badge bg-warning text-dark">Ready — pick up now</span></td>
-                            <td class="small">{{ $reservation->reserved_at?->timezone('Asia/Manila')->format('M j, Y') }}</td>
-                            <td class="small">{{ $reservation->expiresAt()->timezone('Asia/Manila')->format('M j, Y g:i A') }}</td>
-                        </tr>
-                        @endforeach
-                        @foreach($pendingReservations as $reservation)
-                        <tr>
-                            <td>{{ $reservation->book?->title_statement ?? '—' }}</td>
-                            <td><span class="badge bg-secondary">Waiting (checked out)</span></td>
-                            <td class="small">{{ $reservation->reserved_at?->timezone('Asia/Manila')->format('M j, Y') }}</td>
-                            <td class="small text-muted">—</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    @endif
 
     {{-- SUMMARY --}}
     <div class="row g-3 mb-4">
@@ -200,7 +112,7 @@
                             </td>
                             <td>
                                 @if(($log->circulation_type ?? \App\Models\BookLog::CIRCULATION_CHECKOUT) === \App\Models\BookLog::CIRCULATION_CHECKOUT)
-                                    {{ (int) ($log->renew_count ?? 0) }}/{{ \App\Models\Setting::maxRenewalsPerLoan() }}
+                                    {{ (int) ($log->renew_count ?? 0) }}/{{ \App\Http\Controllers\BookController::MAX_RENEWALS_PER_LOAN }}
                                 @else
                                     —
                                 @endif

@@ -1,9 +1,4 @@
 @php
-    $multicopyFormId = $formId ?? 'addBookForm';
-    $multicopyEditMode = $editMode ?? false;
-    $multicopyToggleId = $multicopyEditMode ? 'add_copies' : 'multiple_copies';
-    $multicopySaveOff = $saveLabelOff ?? ($multicopyEditMode ? 'Update book' : 'Save book');
-    $multicopySaveOn = $saveLabelOn ?? ($multicopyEditMode ? 'Update & add copies' : 'Save all copies');
     $copyFieldSelectors = collect(config('catalog.copy_unique_marc', []))
         ->map(function ($d) {
             return [
@@ -16,19 +11,16 @@
 @endphp
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const editMode = @json($multicopyEditMode);
-    const toggle = document.getElementById(@json($multicopyToggleId));
+    const toggle = document.getElementById('multiple_copies');
     const panel = document.getElementById('catalogCopiesPanel');
     const marcEditor = document.getElementById('marcEditor');
     const container = document.getElementById('copy-rows-container');
     const addBtn = document.getElementById('add-copy-row-btn');
     const template = document.getElementById('copy-row-template');
-    const saveBtn = document.querySelector('#{{ $multicopyFormId }} .btn-save, #{{ $multicopyFormId }} .btn-update');
+    const saveBtn = document.querySelector('#addBookForm .btn-save');
     if (!toggle || !panel) return;
 
     const copyFieldSelectors = @json($copyFieldSelectors);
-    const saveLabelOff = @json($multicopySaveOff);
-    const saveLabelOn = @json($multicopySaveOn);
 
     function reindexCopyRows() {
         if (!container) return;
@@ -39,23 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const removeBtn = row.querySelector('.remove-copy-row');
             if (removeBtn) {
-                const rowCount = container.querySelectorAll('[data-copy-row]').length;
-                removeBtn.disabled = editMode ? rowCount <= 0 : rowCount <= 1;
+                removeBtn.disabled = container.querySelectorAll('[data-copy-row]').length <= 1;
             }
         });
     }
 
-    function ensureAtLeastOneCopyRow() {
-        if (!template || !container || !toggle.checked) return;
-        if (container.querySelectorAll('[data-copy-row]').length === 0) {
-            const html = template.innerHTML.replace(/__INDEX__/g, '0');
-            container.insertAdjacentHTML('beforeend', html);
-            reindexCopyRows();
-        }
-    }
-
     function setMarcCopyFieldsVisible(visible) {
-        if (editMode || !marcEditor) return;
+        if (!marcEditor) return;
         copyFieldSelectors.forEach(def => {
             const sub = def.subfield === null ? '_' : def.subfield;
             marcEditor.querySelectorAll(`.marc-field[data-tag="${def.tag}"][data-sub="${sub}"]`).forEach(el => {
@@ -70,22 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function syncMultiCopyMode() {
         const on = toggle.checked;
         panel.classList.toggle('d-none', !on);
-        if (on) {
-            ensureAtLeastOneCopyRow();
-        }
         panel.querySelectorAll('input, button.remove-copy-row, #add-copy-row-btn').forEach(el => {
             if (el.id === 'add-copy-row-btn') {
                 el.disabled = !on;
             } else if (el.matches('input')) {
                 el.disabled = !on;
             } else if (el.matches('.remove-copy-row')) {
-                const rowCount = container.querySelectorAll('[data-copy-row]').length;
-                el.disabled = !on || (editMode ? rowCount <= 0 : rowCount <= 1);
+                el.disabled = !on || container.querySelectorAll('[data-copy-row]').length <= 1;
             }
         });
         setMarcCopyFieldsVisible(!on);
         if (saveBtn) {
-            saveBtn.textContent = on ? saveLabelOn : saveLabelOff;
+            saveBtn.textContent = on ? 'Save all copies' : 'Save book';
         }
     }
 

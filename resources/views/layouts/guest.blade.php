@@ -7,8 +7,12 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        <link href="{{ asset('vendor/fontsource/figtree/latin-400.css') }}" rel="stylesheet" />
+        <link href="{{ asset('vendor/fontsource/figtree/latin-500.css') }}" rel="stylesheet" />
+        <link href="{{ asset('vendor/fontsource/figtree/latin-600.css') }}" rel="stylesheet" />
         <link rel="stylesheet" href="{{ asset(config('branding.css_path')) }}">
-        <link rel="stylesheet" href="{{ asset('css/brand-typography.css') }}">
+        @include('components.branding-overrides')
+        <style>body { font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif; }</style>
 
         <!-- Shared-hosting friendly: avoid Vite build dependency -->
         <script src="https://cdn.tailwindcss.com"></script>
@@ -17,7 +21,7 @@
         <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
             <div>
                 <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
+                    <img src="{{ $brandingSidebarLogoUrl }}" alt="Pantas Logo" class="w-20 h-20 object-contain">
                 </a>
             </div>
 

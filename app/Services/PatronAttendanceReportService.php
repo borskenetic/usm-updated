@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\AttendanceLog;
-use App\Models\Program;
+use App\Models\AttendanceProgram;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +50,6 @@ class PatronAttendanceReportService
             'topStudentsByIns' => collect(),
             'topStudentsByDistinctInDays' => collect(),
             'programAttendanceTotals' => collect(),
-            'programAttendanceUniqueInTotals' => collect(),
             'weeklyInsTrend' => collect(),
             'monthlyInsTrend' => collect(),
             'busiestHours' => collect(),
@@ -65,38 +64,38 @@ class PatronAttendanceReportService
         $inExpr = "LOWER(TRIM(attendance_logs.status)) = 'in'";
 
         $topStudentsByIns = DB::table('attendance_logs')
-            ->join('students', 'students.id', '=', 'attendance_logs.student_id')
+            ->join('attendance_students', 'attendance_students.id', '=', 'attendance_logs.student_id')
             ->whereRaw($inExpr)
             ->when($fromDt && $toDt, fn ($q) => $q->whereBetween('attendance_logs.scanned_at', [$fromDt, $toDt]))
             ->select(
-                'students.id',
-                'students.lastname',
-                'students.firstname',
-                'students.course',
+                'attendance_students.id',
+                'attendance_students.lastname',
+                'attendance_students.firstname',
+                'attendance_students.course',
                 DB::raw('COUNT(*) as ins_count')
             )
-            ->groupBy('students.id', 'students.lastname', 'students.firstname', 'students.course')
+            ->groupBy('attendance_students.id', 'attendance_students.lastname', 'attendance_students.firstname', 'attendance_students.course')
             ->orderByDesc('ins_count')
             ->limit(10)
             ->get();
 
         $topStudentsByDistinctInDays = DB::table('attendance_logs')
-            ->join('students', 'students.id', '=', 'attendance_logs.student_id')
+            ->join('attendance_students', 'attendance_students.id', '=', 'attendance_logs.student_id')
             ->whereRaw($inExpr)
             ->when($fromDt && $toDt, fn ($q) => $q->whereBetween('attendance_logs.scanned_at', [$fromDt, $toDt]))
             ->select(
-                'students.id',
-                'students.lastname',
-                'students.firstname',
-                'students.course',
+                'attendance_students.id',
+                'attendance_students.lastname',
+                'attendance_students.firstname',
+                'attendance_students.course',
                 DB::raw('COUNT(DISTINCT DATE(attendance_logs.scanned_at)) as distinct_in_days')
             )
-            ->groupBy('students.id', 'students.lastname', 'students.firstname', 'students.course')
+            ->groupBy('attendance_students.id', 'attendance_students.lastname', 'attendance_students.firstname', 'attendance_students.course')
             ->orderByDesc('distinct_in_days')
             ->limit(10)
             ->get();
 
-        $registeredByCourse = DB::table('students')
+        $registeredByCourse = DB::table('attendance_students')
             ->whereNotNull('course')
             ->where('course', '!=', '')
             ->select('course', DB::raw('COUNT(*) as student_count'))
@@ -105,13 +104,13 @@ class PatronAttendanceReportService
             ->keyBy('course');
 
         $insByCourse = DB::table('attendance_logs')
-            ->join('students', 'students.id', '=', 'attendance_logs.student_id')
+            ->join('attendance_students', 'attendance_students.id', '=', 'attendance_logs.student_id')
             ->whereRaw($inExpr)
             ->when($fromDt && $toDt, fn ($q) => $q->whereBetween('attendance_logs.scanned_at', [$fromDt, $toDt]))
-            ->whereNotNull('students.course')
-            ->where('students.course', '!=', '')
-            ->select('students.course', DB::raw('COUNT(*) as ins_count'))
-            ->groupBy('students.course')
+            ->whereNotNull('attendance_students.course')
+            ->where('attendance_students.course', '!=', '')
+            ->select('attendance_students.course', DB::raw('COUNT(*) as ins_count'))
+            ->groupBy('attendance_students.course')
             ->get()
             ->keyBy('course');
 
@@ -128,34 +127,6 @@ class PatronAttendanceReportService
                 'avg_ins_per_student' => $sc > 0 ? round($ic / $sc, 2) : 0.0,
             ];
         })->sortByDesc('ins_count')->values();
-
-        $uniqueInsByCourse = DB::table('attendance_logs')
-            ->join('students', 'students.id', '=', 'attendance_logs.student_id')
-            ->whereRaw($inExpr)
-            ->when($fromDt && $toDt, fn ($q) => $q->whereBetween('attendance_logs.scanned_at', [$fromDt, $toDt]))
-            ->whereNotNull('students.course')
-            ->where('students.course', '!=', '')
-            ->select(
-                'students.course',
-                DB::raw("COUNT(DISTINCT CONCAT(attendance_logs.student_id, '-', DATE(attendance_logs.scanned_at))) as unique_in_days_count")
-            )
-            ->groupBy('students.course')
-            ->get()
-            ->keyBy('course');
-
-        $uniqueCodes = $registeredByCourse->keys()->merge($uniqueInsByCourse->keys())->unique()->sort()->values();
-
-        $programAttendanceUniqueInTotals = $uniqueCodes->map(function ($code) use ($registeredByCourse, $uniqueInsByCourse) {
-            $sc = (int) ($registeredByCourse->get($code)->student_count ?? 0);
-            $uc = (int) ($uniqueInsByCourse->get($code)->unique_in_days_count ?? 0);
-
-            return (object) [
-                'course' => $code,
-                'student_count' => $sc,
-                'unique_in_days_count' => $uc,
-                'avg_unique_in_days_per_student' => $sc > 0 ? round($uc / $sc, 2) : 0.0,
-            ];
-        })->sortByDesc('unique_in_days_count')->values();
 
         $tz = 'Asia/Manila';
         $weeklyInsTrend = collect();
@@ -254,7 +225,6 @@ class PatronAttendanceReportService
             'topStudentsByIns',
             'topStudentsByDistinctInDays',
             'programAttendanceTotals',
-            'programAttendanceUniqueInTotals',
             'weeklyInsTrend',
             'monthlyInsTrend',
             'busiestHours'
@@ -264,7 +234,7 @@ class PatronAttendanceReportService
     public function streamCsvResponse(?string $from = null, ?string $to = null): StreamedResponse
     {
         $reports = $this->build($from, $to);
-        $programNameByCode = Program::query()->pluck('program_name', 'program_code');
+        $programNameByCode = AttendanceProgram::query()->pluck('program_name', 'program_code');
         $filename = 'patron-attendance-reports-'.now()->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($reports, $programNameByCode) {
@@ -317,27 +287,6 @@ class PatronAttendanceReportService
                     $row->avg_ins_per_student ?? 0,
                 ]);
             }
-            $programTotalsRegistered = collect($reports['programAttendanceTotals'])->sum('student_count');
-            $programTotalsIns = collect($reports['programAttendanceTotals'])->sum('ins_count');
-            $programTotalsAvg = $programTotalsRegistered > 0 ? round($programTotalsIns / $programTotalsRegistered, 2) : 0;
-            $w(['TOTAL', '', $programTotalsRegistered, $programTotalsIns, $programTotalsAvg]);
-            $w([]);
-
-            $w(['# TOTALS BY PROGRAM / COURSE — UNIQUE IN DAYS (1 per patron per day)']);
-            $w(['Course code', 'Program name', 'Registered patrons', 'Unique IN days', 'Avg unique IN days / patron']);
-            foreach ($reports['programAttendanceUniqueInTotals'] as $row) {
-                $w([
-                    $row->course,
-                    $programNameByCode->get($row->course, ''),
-                    $row->student_count,
-                    $row->unique_in_days_count,
-                    $row->avg_unique_in_days_per_student ?? 0,
-                ]);
-            }
-            $programUniqueTotalsRegistered = collect($reports['programAttendanceUniqueInTotals'])->sum('student_count');
-            $programUniqueTotalsIns = collect($reports['programAttendanceUniqueInTotals'])->sum('unique_in_days_count');
-            $programUniqueTotalsAvg = $programUniqueTotalsRegistered > 0 ? round($programUniqueTotalsIns / $programUniqueTotalsRegistered, 2) : 0;
-            $w(['TOTAL', '', $programUniqueTotalsRegistered, $programUniqueTotalsIns, $programUniqueTotalsAvg]);
             $w([]);
 
             $w(['# IN SCANS BY WEEK (last 12 weeks, Asia/Manila)']);

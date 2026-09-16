@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\BookLog;
 use App\Models\Setting;
 use App\Models\Student;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -100,14 +98,6 @@ class SMSController extends Controller
             ['value' => $request->message]
         );
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SMS,
-            'Scan SMS template updated',
-            null,
-            route('sms.page'),
-            'staff',
-        );
-
         return back()->with('success', 'Scan SMS template saved.');
     }
 
@@ -131,7 +121,7 @@ class SMSController extends Controller
     }
 
     /**
-     * Single-number send (RFID scanner) or blast to filtered students.
+     * Single-number send (RFID scanner) or blast to filtered library_students.
      */
     public function send(Request $request)
     {
@@ -162,14 +152,6 @@ class SMSController extends Controller
 
                 return back()->with('error', 'SMS modem rejected the request. Check logs and that sms_server.py is running.');
             }
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_SMS,
-                'SMS sent',
-                'Single message',
-                route('sms.page'),
-                'staff',
-            );
 
             return back()->with('success', 'SMS queued for sending.');
         }
@@ -240,14 +222,6 @@ class SMSController extends Controller
             $msg .= " {$skipped} student(s) skipped (no valid number).";
         }
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SMS,
-            'SMS blast sent',
-            count($payload).' recipient(s)',
-            route('sms.page'),
-            'staff',
-        );
-
         return back()->with('success', $msg);
     }
 
@@ -303,7 +277,7 @@ class SMSController extends Controller
     public function sendOneStudent(Request $request)
     {
         $request->validate([
-            'student_id' => 'required|integer|exists:students,id',
+            'student_id' => 'required|integer|exists:library_students,id',
             'message' => 'required|string|max:2000',
         ]);
 
@@ -382,29 +356,29 @@ class SMSController extends Controller
             return back()->with('error', 'No valid mobile numbers to send to.'.($skipped > 0 ? " ({$skipped} skipped.)" : ''));
         }
 
-        $msg = count($payload).' message(s) queued for patrons with overdue books.';
+        $msg = count($payload).' message(s) queued for patrons with overdue library_books.';
         if ($skipped > 0) {
             $msg .= " {$skipped} skipped (invalid number).";
         }
 
         return $this->modemFlashAfterPost($this->postToSmsModem($payload), $msg);
     }
-    
+
     public function sendDirect(string $number, string $message): bool
     {
         $number = $this->normalizePhilippineMobile($number);
-    
+
         if ($number === '') {
             return false;
         }
-    
+
         $modemResponse = $this->postToSmsModem([
             [
                 'number' => $number,
                 'message' => $message,
-            ]
+            ],
         ]);
-    
+
         return $modemResponse && $modemResponse->successful();
     }
 }

@@ -1,4 +1,4 @@
-@extends('layouts.main')
+@extends('layouts.sidebar')
 
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 custom-margin">
@@ -61,7 +61,7 @@
     </div>
 
     <div class="d-flex justify-content-center mt-3">
-        @include('layouts.partials.pagination_bar', ['paginator' => $books])
+        {{ $books->withQueryString()->links('pagination::bootstrap-5') }}
     </div>
 </div>
 @endsection

@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -49,7 +47,7 @@ class FileController extends Controller
         $request->validate([
             'file' => 'required|file|max:20480',
             'folder_preset' => 'required|string|in:'.$presetKeys.',custom',
-            'folder_custom' => 'required_if:folder_preset,custom|string|max:80',
+            'folder_custom' => 'nullable|required_if:folder_preset,custom|string|max:80',
         ]);
 
         $folder = $this->resolveUploadFolder(
@@ -70,14 +68,6 @@ class FileController extends Controller
             'filename' => $originalName,
             'filepath' => $relativePath,
         ]);
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_FILE,
-            'File uploaded',
-            "{$originalName} → {$folder}",
-            route('files.index', ['folder' => $folder]),
-            'file',
-        );
 
         return redirect()
             ->route('files.index', ['folder' => $folder])
@@ -129,18 +119,8 @@ class FileController extends Controller
     public function delete($id)
     {
         $file = File::findOrFail($id);
-        $name = $file->filename;
-        $folder = $file->folder;
         Storage::disk('public')->delete($file->publicDiskPath());
         $file->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_FILE,
-            'File deleted',
-            "{$name} ({$folder})",
-            route('files.index', ['folder' => $folder]),
-            'file',
-        );
 
         return back()->with('success', 'File deleted.');
     }

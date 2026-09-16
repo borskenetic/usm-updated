@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Holiday;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
 
 class HolidayController extends Controller
 {
@@ -35,14 +33,6 @@ class HolidayController extends Controller
     
         if ($holiday) {
             $holiday->delete();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_SETTINGS,
-                'Holiday removed',
-                $date,
-                route('book.index'),
-                'staff',
-            );
     
             return response()->json([
                 'status' => 'removed'
@@ -53,15 +43,6 @@ class HolidayController extends Controller
             'holiday_date' => $date,
             'name' => $validated['name'] ?? null,
         ]);
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'Holiday added',
-            ($holiday->name ?: $date),
-            route('book.index'),
-            'staff',
-            $holiday,
-        );
     
         return response()->json([
             'status' => 'added',

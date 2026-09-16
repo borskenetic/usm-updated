@@ -2,10 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const header = document.querySelector('header');
     const navToggle = document.querySelector('#navMenuToggle');
     const primaryNav = document.querySelector('#primaryNav');
-    const loginBtn = document.querySelector('.login-btn');
-    const aboutSection = document.querySelector('.about-section');
-    const formBox = document.querySelector('.form-box');
-    const contactInfo = document.querySelector('.contact-info-section');
 
     if (navToggle && primaryNav) {
         const setMenuState = (isOpen) => {
@@ -36,12 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (loginBtn) {
-        loginBtn.addEventListener('click', () => {
-            window.location.href = '/login';
-        });
-    }
-
     if (header) {
         const hero = document.querySelector('.hero-section');
         const updateHeaderShadow = () => {
@@ -59,37 +49,25 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('scroll', updateHeaderShadow, { passive: true });
     }
 
-    if (aboutSection && 'IntersectionObserver' in window) {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
-            });
-        }, { threshold: 0.2 });
+    // When hero videos fail to load, keep the KEPLRC banner visible via poster/fallback bg.
+    document.querySelectorAll('.hero-section .bg-video, .zendy-banner .bg-video').forEach((video) => {
+        const showFallback = () => {
+            const parent = video.closest('.hero-section, .zendy-banner');
+            if (parent) {
+                parent.classList.add('video-fallback');
+            }
+        };
 
-        observer.observe(aboutSection);
-    }
+        video.addEventListener('error', showFallback);
+        video.querySelectorAll('source').forEach((source) => {
+            source.addEventListener('error', showFallback);
+        });
 
-    if (contactInfo) {
-        contactInfo.style.opacity = '0';
-        contactInfo.style.transform = 'translateY(-20px)';
-
+        // Empty/missing source often leaves a black frame; detect after a short wait.
         setTimeout(() => {
-            contactInfo.style.transition = 'all 0.8s ease-out';
-            contactInfo.style.opacity = '1';
-            contactInfo.style.transform = 'translateY(0)';
-        }, 200);
-    }
-
-    if (formBox) {
-        formBox.style.opacity = '0';
-        formBox.style.transform = 'translateY(20px)';
-
-        setTimeout(() => {
-            formBox.style.transition = 'all 1s ease-out';
-            formBox.style.opacity = '1';
-            formBox.style.transform = 'translateY(0)';
-        }, 500);
-    }
+            if (video.readyState < 2 && video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+                showFallback();
+            }
+        }, 800);
+    });
 });

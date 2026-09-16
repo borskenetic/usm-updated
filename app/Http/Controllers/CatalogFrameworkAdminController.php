@@ -6,8 +6,6 @@ use App\Models\Book;
 use App\Models\CatalogFramework;
 use App\Models\CatalogFrameworkField;
 use App\Models\MarcField;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -80,15 +78,6 @@ class CatalogFrameworkAdminController extends Controller
             ]);
         }
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'Catalog framework updated',
-            $catalog_framework->name,
-            route('admin.catalog_frameworks.edit', $catalog_framework),
-            'book',
-            $catalog_framework,
-        );
-
         return redirect()
             ->route('admin.catalog_frameworks.edit', $catalog_framework)
             ->with('success', 'Framework fields updated.');
@@ -115,15 +104,6 @@ class CatalogFrameworkAdminController extends Controller
             'book_column' => null,
             'default_value' => null,
         ]);
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'MARC field added to framework',
-            $catalog_framework->name,
-            route('admin.catalog_frameworks.edit', $catalog_framework),
-            'book',
-            $catalog_framework,
-        );
 
         return back()->with('success', 'Field added to framework.');
     }
@@ -174,15 +154,6 @@ class CatalogFrameworkAdminController extends Controller
             'default_value' => null,
         ]);
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'MARC tag created',
-            "{$data['tag']}{$subfield} — {$catalog_framework->name}",
-            route('admin.catalog_frameworks.edit', $catalog_framework),
-            'book',
-            $marc,
-        );
-
         return back()->with('success', 'New MARC tag created and added to this framework.');
     }
 
@@ -193,15 +164,6 @@ class CatalogFrameworkAdminController extends Controller
         }
 
         $field->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_SETTINGS,
-            'MARC field removed from framework',
-            $catalog_framework->name,
-            route('admin.catalog_frameworks.edit', $catalog_framework),
-            'book',
-            $catalog_framework,
-        );
 
         return back()->with('success', 'Field removed from framework (MARC definition is kept for reuse).');
     }

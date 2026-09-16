@@ -3,28 +3,27 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
-use App\Models\PendingEmployee;
 use App\Models\Program;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
-use App\Support\MiddleInitial;
-use App\Support\PatronQrCode;
-use App\Support\PerPage;
-use App\Support\RespondsWithHydratablePartial;
+use App\Support\PatronNameSearch;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
-    use RespondsWithHydratablePartial;
-
-    private function programList()
+    private function generateNextQrCode(): string
     {
-        return Cache::remember('employees.program_list', 600, fn () =>
-            Program::orderBy('program_name')->get()
-        );
+        $last = Employee::whereNotNull('qrcode')
+            ->where('qrcode', 'like', 'E-%')
+            ->orderByDesc('id')
+            ->first();
+
+        $nextNumber = 1;
+        if ($last && preg_match('/E-(\d+)/', $last->qrcode, $matches)) {
+            $nextNumber = (int) $matches[1] + 1;
+        }
+
+        return 'E-'.str_pad((string) $nextNumber, 8, '0', STR_PAD_LEFT);
     }
 
     /** @return list<int> */
@@ -37,22 +36,19 @@ class EmployeeController extends Controller
 
     public function index(Request $request)
     {
-        $programs = $this->programList();
+        $programs = Program::orderBy('program_name')->get();
         $workStartYears = $this->workStartYears();
 
         $query = Employee::query();
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('firstname', 'like', "%{$search}%")
-                    ->orWhere('lastname', 'like', "%{$search}%")
-                    ->orWhere('employee_id', 'like', "%{$search}%")
-                    ->orWhere('designation', 'like', "%{$search}%")
-                    ->orWhere('program', 'like', "%{$search}%")
-                    ->orWhere('department', 'like', "%{$search}%")
-                    ->orWhere('qrcode', 'like', "%{$search}%");
-            });
+            PatronNameSearch::apply($query, (string) $request->search, [
+                'employee_id',
+                'designation',
+                'program',
+                'department',
+                'qrcode',
+            ]);
         }
 
         if ($request->filled('program')) {
@@ -63,16 +59,9 @@ class EmployeeController extends Controller
             $query->where('year_start_work', $request->year_start_work);
         }
 
-        $faculty = $query->orderBy('lastname')->paginate(PerPage::resolve($request, 15))->withQueryString();
+        $faculty = $query->orderBy('lastname')->paginate(15)->withQueryString();
 
-        $pendingRegistrationsCount = PendingEmployee::count();
-
-        return $this->hydratableResponse(
-            $request,
-            'employees.index',
-            'employees.partials.list-table',
-            compact('faculty', 'programs', 'workStartYears', 'pendingRegistrationsCount'),
-        );
+        return view('employees.index', compact('faculty', 'programs', 'workStartYears'));
     }
 
     public function create()
@@ -85,13 +74,11 @@ class EmployeeController extends Controller
 
     public function store(Request $request)
     {
-        MiddleInitial::mergeIntoRequest($request);
-
         $validated = $request->validate([
             'firstname' => 'required|string|max:255',
             'lastname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
-            'employee_id' => 'required|string|max:255|unique:employees,employee_id',
+            'middle_initial' => 'nullable|string|max:16',
+            'employee_id' => 'required|string|max:255|unique:library_employees,employee_id',
             'designation' => 'required|string|max:255',
             'program' => 'required|string|max:64',
             'year_start_work' => 'required|string|max:16',
@@ -114,7 +101,7 @@ class EmployeeController extends Controller
             $validated['role_id'] = 2;
             $validated['department'] = $program?->program_name ?? $validated['program'];
             $validated['position'] = $validated['designation'];
-            $validated['qrcode'] = PatronQrCode::nextEmployee();
+            $validated['qrcode'] = $this->generateNextQrCode();
 
             if ($request->hasFile('formal_picture')) {
                 $file = $request->file('formal_picture');
@@ -139,18 +126,9 @@ class EmployeeController extends Controller
                 $validated['employee_signature'] = 'images/signatures/'.$sigName;
             }
 
-            $employee = Employee::create($validated);
+            Employee::create($validated);
 
             DB::commit();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_PATRON,
-                'Faculty/staff created',
-                "{$employee->lastname}, {$employee->firstname}",
-                route('employees.edit', $employee->id),
-                'patron',
-                $employee,
-            );
 
             return redirect()->route('employees.index')
                 ->with('success', 'Faculty & staff registered successfully.');
@@ -174,13 +152,11 @@ class EmployeeController extends Controller
     {
         $employee = Employee::findOrFail($id);
 
-        MiddleInitial::mergeIntoRequest($request);
-
         $validated = $request->validate([
-            'employee_id' => 'required|string|max:255|unique:employees,employee_id,'.$employee->id,
+            'employee_id' => 'required|string|max:255|unique:library_employees,employee_id,'.$employee->id,
             'firstname' => 'required|string|max:255',
             'lastname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
+            'middle_initial' => 'nullable|string|max:16',
             'designation' => 'required|string|max:255',
             'program' => 'required|string|max:64',
             'year_start_work' => 'required|string|max:16',
@@ -224,31 +200,12 @@ class EmployeeController extends Controller
 
         $employee->update($validated);
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Faculty/staff updated',
-            "{$employee->lastname}, {$employee->firstname}",
-            route('employees.edit', $employee->id),
-            'patron',
-            $employee,
-        );
-
         return redirect()->route('employees.index')->with('success', 'Faculty & staff record updated.');
     }
 
     public function destroy($id)
     {
-        $employee = Employee::findOrFail($id);
-        $label = "{$employee->lastname}, {$employee->firstname}";
-        $employee->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Faculty/staff deleted',
-            $label,
-            route('employees.index'),
-            'patron',
-        );
+        Employee::findOrFail($id)->delete();
 
         return back()->with('success', 'Record deleted successfully.');
     }

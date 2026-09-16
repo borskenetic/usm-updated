@@ -1,8 +1,9 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
+
+@section('title', 'Circulation Policy')
 
 @section('styles')
-<link rel="stylesheet" href="{{ asset('css/books/index.css') }}">
-<link rel="stylesheet" href="{{ asset('css/admin/circulation.css') }}">
+<link rel="stylesheet" href="{{ asset('css/admin/circulation.css') }}?v={{ filemtime(public_path('css/admin/circulation.css')) }}">
 <style>
     #holiday-calendar { min-height: 300px; }
     #calendarWrapper.is-open { display: block !important; }

@@ -4,19 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Imports\StudentsImport;
 use App\Models\BookLog;
-use App\Models\BookReservation;
 use App\Models\PendingStudent;
 use App\Models\Program;
 use App\Models\Student;
 use App\Models\StudentEditRequest;
-use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
-use App\Support\MiddleInitial;
-use App\Support\PatronQrCode;
-use App\Support\PerPage;
-use App\Support\RespondsWithHydratablePartial;
+use App\Support\PatronNameSearch;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -24,38 +18,41 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class StudentController extends Controller
 {
-    use RespondsWithHydratablePartial;
-
-    private function programList()
+    private function generateNextQrCode()
     {
-        return Cache::remember('students.program_list', 600, fn () =>
-            Program::orderBy('program_code')->get()
-        );
+        $lastStudent = Student::whereNotNull('qrcode')
+            ->orderByDesc('id')
+            ->first();
+
+        $nextNumber = 1;
+
+        if ($lastStudent && preg_match('/S-(\d+)/', $lastStudent->qrcode, $matches)) {
+            $nextNumber = (int) $matches[1] + 1;
+        }
+
+        return 'S-'.str_pad($nextNumber, 8, '0', STR_PAD_LEFT);
     }
-    
+
     // Show all students
     public function index(Request $request)
     {
         $query = Student::query();
-        $programs = $this->programList();
-    
-        // 🔍 Search
-        if ($request->has('search') && $request->search != '') {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('lastname', 'like', "%{$search}%")
-                  ->orWhere('firstname', 'like', "%{$search}%")
-                  ->orWhere('course', 'like', "%{$search}%")
-                  ->orWhere('qrcode', 'like', "%{$search}%")
-                  ->orWhere('id_number', 'like', "%{$search}%");
-            });
+        $programs = Program::orderBy('program_code')->get();
+
+        // 🔍 Search (supports "Lastname, Firstname")
+        if ($request->filled('search')) {
+            PatronNameSearch::apply($query, (string) $request->search, [
+                'course',
+                'qrcode',
+                'id_number',
+            ]);
         }
-    
+
         // 🎓 Filter by Course
         if ($request->filled('course')) {
             $query->where('course', $request->course);
         }
-    
+
         // 📚 Filter by Year
         if ($request->filled('year')) {
             $query->where('year', $request->year);
@@ -63,47 +60,32 @@ class StudentController extends Controller
         if ($request->filled('program_id')) {
             $query->where('course', $request->program_id);
         }
-    
-        $students = $query->orderBy('lastname', 'asc')->paginate(PerPage::resolve($request, 15))->withQueryString();
 
-        $pendingEditsCount = StudentEditRequest::where('status', 'pending')->count();
-        $pendingRegistrationsCount = PendingStudent::count();
+        $students = $query->orderBy('lastname', 'asc')->paginate(15)->appends($request->all());
 
-        return $this->hydratableResponse(
-            $request,
-            'students.students',
-            'students.partials.list-table',
-            compact(
-                'students',
-                'programs',
-                'pendingEditsCount',
-                'pendingRegistrationsCount',
-            ),
-        );
+        return view('students.students', compact('students', 'programs'));
     }
 
     // Show form to create new student
     public function create()
     {
         $programs = Program::orderBy('program_name')->get();
+
         return view('students.create', compact('programs'));
     }
 
     // Store new student
     public function store(Request $request)
     {
-        MiddleInitial::mergeIntoRequest($request);
-
         $validated = $request->validate([
-            'id_number' => 'required|string|max:255|unique:students,id_number',
+            'id_number' => 'required|string|max:255|unique:library_students,id_number',
             'firstname' => 'required|string|max:255',
             'lastname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
+            'middle_initial' => 'nullable|string|max:255',
             'birthday' => 'nullable|date',
             'course' => 'required|string|max:255',
             'year' => 'required|string|max:255',
             'mobile_number' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
             'address' => 'nullable|string',
             'emergency_person' => 'nullable|string|max:255',
             'emergency_relationship' => 'nullable|string|max:255',
@@ -120,64 +102,57 @@ class StudentController extends Controller
             // Profile Picture
             if ($request->hasFile('profile_picture')) {
                 $file = $request->file('profile_picture');
-                $filename = time() . '_profile_' . Str::slug($file->getClientOriginalName());
+                $filename = time().'_profile_'.Str::slug($file->getClientOriginalName());
                 $dest = public_path('images/profile_pictures');
-                if (!file_exists($dest)) {
+                if (! file_exists($dest)) {
                     mkdir($dest, 0755, true);
                 }
                 $file->move($dest, $filename);
-                $validated['profile_picture'] = 'images/profile_pictures/' . $filename;
+                $validated['profile_picture'] = 'images/profile_pictures/'.$filename;
             }
 
             // Signature (base64)
-            if (!empty($validated['student_signature']) && str_starts_with($validated['student_signature'], 'data:')) {
+            if (! empty($validated['student_signature']) && str_starts_with($validated['student_signature'], 'data:')) {
 
                 [$meta, $contents] = explode(',', $validated['student_signature'], 2);
                 $ext = preg_match('/jpeg|jpg/i', $meta) ? 'jpg' : 'png';
-                $sigName = time() . '_sig.' . $ext;
+                $sigName = time().'_sig.'.$ext;
 
                 $sigDest = public_path('images/student_signatures');
-                if (!file_exists($sigDest)) {
+                if (! file_exists($sigDest)) {
                     mkdir($sigDest, 0755, true);
                 }
 
                 file_put_contents(
-                    $sigDest . DIRECTORY_SEPARATOR . $sigName,
+                    $sigDest.DIRECTORY_SEPARATOR.$sigName,
                     base64_decode($contents)
                 );
 
-                $validated['student_signature'] = 'images/student_signatures/' . $sigName;
+                $validated['student_signature'] = 'images/student_signatures/'.$sigName;
             }
 
             // ✅ Generate QR ONCE
-            $validated['qrcode'] = PatronQrCode::nextStudent();
+            $validated['qrcode'] = $this->generateNextQrCode();
 
-            $student = Student::create($validated);
+            Student::create($validated);
 
             DB::commit();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_PATRON,
-                'Student created',
-                "{$student->lastname}, {$student->firstname} ({$student->id_number})",
-                route('students.edit', $student->id),
-                'patron',
-                $student,
-            );
 
             return redirect()->route('students.index')
                 ->with('success', 'Student Registered Successfully!');
 
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', $e->getMessage());
         }
     }
-    
+
     // Edit form
     public function edit($id)
     {
         $student = Student::findOrFail($id);
+
         return view('students.edit', compact('student'));
     }
 
@@ -186,32 +161,24 @@ class StudentController extends Controller
     {
         $student = Student::findOrFail($id);
 
-        MiddleInitial::mergeIntoRequest($request);
-
-        $request->merge([
-            'qrcode' => trim((string) $request->input('qrcode')),
-        ]);
-
         $validated = $request->validate([
-            'id_number' => 'nullable|string|unique:students,id_number,' . $id,
-            'qrcode' => 'required|string|max:255|unique:students,qrcode,' . $id,
+            'id_number' => 'nullable|string|unique:library_students,id_number,'.$id,
             'lastname' => 'required|string|max:255',
             'firstname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
+            'middle_initial' => 'nullable|string|max:255',
             'birthday' => 'nullable|date',
-        
+
             'course' => 'nullable|string|max:255',
             'year' => 'nullable|string|max:255',
-        
+
             'mobile_number' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
             'address' => 'nullable|string',
-        
+
             'emergency_person' => 'nullable|string|max:255',
             'emergency_relationship' => 'nullable|string|max:255',
             'emergency_number' => 'nullable|string|max:255',
             'emergency_address' => 'nullable|string',
-        
+
             'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'student_signature' => 'nullable|string',
         ]);
@@ -227,53 +194,46 @@ class StudentController extends Controller
                 }
 
                 $image = $request->file('profile_picture');
-                $filename = time() . '_' . Str::slug($image->getClientOriginalName());
+                $filename = time().'_'.Str::slug($image->getClientOriginalName());
                 $dest = public_path('images/profile_pictures');
-                if (!file_exists($dest)) {
+                if (! file_exists($dest)) {
                     mkdir($dest, 0755, true);
                 }
                 $image->move($dest, $filename);
-                $validated['profile_picture'] = 'images/profile_pictures/' . $filename;
+                $validated['profile_picture'] = 'images/profile_pictures/'.$filename;
             }
 
-            if (!empty($validated['student_signature']) && str_starts_with($validated['student_signature'], 'data:')) {
+            if (! empty($validated['student_signature']) && str_starts_with($validated['student_signature'], 'data:')) {
 
                 [$meta, $contents] = explode(',', $validated['student_signature'], 2);
                 $ext = preg_match('/jpeg|jpg/i', $meta) ? 'jpg' : 'png';
-                $sigName = time() . '_sig.' . $ext;
+                $sigName = time().'_sig.'.$ext;
 
                 $sigDest = public_path('images/student_signatures');
-                if (!file_exists($sigDest)) {
+                if (! file_exists($sigDest)) {
                     mkdir($sigDest, 0755, true);
                 }
 
                 file_put_contents(
-                    $sigDest . DIRECTORY_SEPARATOR . $sigName,
+                    $sigDest.DIRECTORY_SEPARATOR.$sigName,
                     base64_decode($contents)
                 );
 
-                $validated['student_signature'] = 'images/student_signatures/' . $sigName;
+                $validated['student_signature'] = 'images/student_signatures/'.$sigName;
             }
 
+            // ❌ DO NOT TOUCH QR HERE
             $student->update($validated);
 
             DB::commit();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_PATRON,
-                'Student updated',
-                "{$student->lastname}, {$student->firstname} ({$student->id_number})",
-                route('students.edit', $student->id),
-                'patron',
-                $student,
-            );
 
             return redirect()->route('students.index')
                 ->with('success', 'Student updated successfully!');
 
         } catch (\Throwable $e) {
             DB::rollBack();
-            dd($e->getMessage());
+
+            return back()->withInput()->with('error', $e->getMessage());
         }
     }
 
@@ -286,16 +246,7 @@ class StudentController extends Controller
             Storage::disk('public')->delete($student->profile_picture);
         }
 
-        $label = "{$student->lastname}, {$student->firstname} ({$student->id_number})";
         $student->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Student deleted',
-            $label,
-            route('students.index'),
-            'patron',
-        );
 
         return redirect()->route('students.index')->with('success', 'Student Deleted Successfully!');
     }
@@ -303,6 +254,7 @@ class StudentController extends Controller
     public function show($id)
     {
         $student = Student::findOrFail($id);
+
         return view('students.show', compact('student'));
     }
 
@@ -310,11 +262,12 @@ class StudentController extends Controller
     public function pending()
     {
         $pendingStudents = PendingStudent::orderBy('lastname')->get();
+
         return view('students.pending', compact('pendingStudents'));
     }
 
     // Approve pending student → move to students table
-    public function approve($id)
+    public function approve($id, AdminActivityLogger $activities)
     {
         DB::beginTransaction();
 
@@ -325,37 +278,23 @@ class StudentController extends Controller
                 throw new \Exception('ID Number already exists in students table.');
             }
 
-            Student::create([
+            $student = Student::create([
                 'id_number' => strtoupper($pending->id_number),
                 'lastname' => strtoupper($pending->lastname),
                 'firstname' => strtoupper($pending->firstname),
-                'middle_initial' => MiddleInitial::normalize($pending->middle_initial),
+                'middle_initial' => strtoupper($pending->middle_initial ?? ''),
                 'birthday' => $pending->birthday,
                 'course' => strtoupper($pending->course),
                 'year' => strtoupper($pending->year),
-                'mobile_number' => $pending->mobile_number,
-                'email' => $pending->email,
-                'address' => $pending->address,
-                'emergency_person' => $pending->emergency_person,
-                'emergency_relationship' => $pending->emergency_relationship,
-                'emergency_number' => $pending->emergency_number,
-                'emergency_address' => $pending->emergency_address,
                 'profile_picture' => $pending->profile_picture,
                 'student_signature' => $pending->student_signature,
-                'qrcode' => $pending->qrcode ?: PatronQrCode::nextStudent(),
+                'qrcode' => $pending->qrcode ?: $this->generateNextQrCode(),
             ]);
 
             $pending->delete();
+            $activities->log('library', 'patron.approved', 'Library student approved', $student->id_number, $student);
 
             DB::commit();
-
-            AdminActivityLogger::staff(
-                AdminActivity::TYPE_PATRON,
-                'Pending student approved',
-                "{$pending->lastname}, {$pending->firstname} ({$pending->id_number})",
-                route('students.index'),
-                'patron',
-            );
 
             return back()->with('success', 'Student approved and added to the students table.');
 
@@ -367,19 +306,12 @@ class StudentController extends Controller
     }
 
     // Reject pending student
-    public function reject($id)
+    public function reject($id, AdminActivityLogger $activities)
     {
         $pending = PendingStudent::findOrFail($id);
-        $label = "{$pending->lastname}, {$pending->firstname} ({$pending->id_number})";
+        $idNumber = $pending->id_number;
         $pending->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Pending student rejected',
-            $label,
-            route('pending.index'),
-            'patron',
-        );
+        $activities->log('library', 'patron.rejected', 'Library student rejected', $idNumber);
 
         return back()->with('success', 'Registration rejected.');
     }
@@ -399,18 +331,6 @@ class StudentController extends Controller
 
         $program = Program::where('program_code', $student->course)->first();
         $programs = Program::orderBy('program_name')->get();
-
-        BookReservation::expireStale();
-
-        $bookReservations = BookReservation::query()
-            ->with('book')
-            ->where('student_id', $student->id)
-            ->whereIn('status', [BookReservation::STATUS_PENDING, BookReservation::STATUS_READY])
-            ->orderByDesc('reserved_at')
-            ->get();
-
-        $readyReservations = $bookReservations->where('status', BookReservation::STATUS_READY)->values();
-        $pendingReservations = $bookReservations->where('status', BookReservation::STATUS_PENDING)->values();
 
         $legacyComma = "{$student->lastname}, {$student->firstname}";
         $legacySpace = trim("{$student->firstname} {$student->lastname}");
@@ -483,8 +403,6 @@ class StudentController extends Controller
             'student',
             'program',
             'programs',
-            'readyReservations',
-            'pendingReservations',
             'borrowedBooks',
             'booksOutCount',
             'overdueBooksCount',
@@ -503,17 +421,14 @@ class StudentController extends Controller
             return back()->with('error', 'You already have a pending request.');
         }
 
-        MiddleInitial::mergeIntoRequest($request);
-
         $request->validate([
             'lastname' => 'required|string|max:255',
             'firstname' => 'required|string|max:255',
-            'middle_initial' => MiddleInitial::validationRule(),
+            'middle_initial' => 'nullable|string|max:255',
             'birthday' => 'nullable|date',
-            'program_id' => 'nullable|exists:programs,id',
+            'program_id' => 'nullable|exists:library_programs,id',
             'year' => 'nullable|string|max:10',
             'mobile_number' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
             'address' => 'nullable|string',
             'emergency_person' => 'nullable|string|max:255',
             'emergency_relationship' => 'nullable|string|max:255',
@@ -534,13 +449,19 @@ class StudentController extends Controller
             $photoPath = 'images/edits/'.$filename;
         }
 
-        StudentEditRequest::create([
+        $course = $student->course;
+        if ($request->filled('program_id')) {
+            $program = Program::find($request->program_id);
+            $course = $program?->program_code ?? $student->course;
+        }
+
+        $editRequest = StudentEditRequest::create([
             'student_id' => $student->id,
             'lastname' => $request->lastname,
             'firstname' => $request->firstname,
-            'middle_initial' => MiddleInitial::normalize($request->middle_initial),
+            'middle_initial' => $request->middle_initial,
             'birthday' => $request->birthday,
-            'program_id' => $request->program_id,
+            'course' => $course,
             'year' => $request->year,
             'mobile_number' => $request->mobile_number,
             'address' => $request->address,
@@ -549,16 +470,13 @@ class StudentController extends Controller
             'emergency_number' => $request->emergency_number,
             'emergency_address' => $request->emergency_address,
             'profile_picture' => $photoPath,
-            'email' => $request->email,
+            'status' => 'pending',
         ]);
 
-        $editRequest = $student->editRequests()->latest()->first();
-        if ($editRequest) {
-            \App\Services\AdminActivityLogger::patronEditRequest(
-                $editRequest,
-                "{$student->lastname}, {$student->firstname}",
-            );
-        }
+        app(AdminActivityLogger::class)->patronEditRequest(
+            $editRequest,
+            "{$student->lastname}, {$student->firstname}",
+        );
 
         return back()->with('success', 'Edit request submitted for approval.');
     }
@@ -577,18 +495,12 @@ class StudentController extends Controller
             $newProfilePath = $req->profile_picture;
         }
 
-        $programCode = $student->course;
-        if ($req->program_id) {
-            $program = Program::find($req->program_id);
-            $programCode = $program ? $program->program_code : $student->course;
-        }
-
         $student->update([
             'lastname' => $req->lastname,
             'firstname' => $req->firstname,
-            'middle_initial' => MiddleInitial::normalize($req->middle_initial),
+            'middle_initial' => $req->middle_initial,
             'birthday' => $req->birthday,
-            'course' => $programCode,
+            'course' => $req->course ?? $student->course,
             'year' => $req->year,
             'mobile_number' => $req->mobile_number,
             'address' => $req->address,
@@ -597,22 +509,12 @@ class StudentController extends Controller
             'emergency_number' => $req->emergency_number,
             'emergency_address' => $req->emergency_address,
             'profile_picture' => $newProfilePath,
-            'email' => $req->email ?? $student->email,
         ]);
 
         $req->status = 'approved';
         $req->reviewed_at = now();
         $req->reviewed_by = auth()->id();
         $req->save();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Patron edit request approved',
-            "{$student->lastname}, {$student->firstname}",
-            route('students.pending.requests'),
-            'patron',
-            $student,
-        );
 
         return back()->with('success', 'Request approved and changes applied.');
     }
@@ -626,23 +528,12 @@ class StudentController extends Controller
         $req->reviewed_by = auth()->id();
         $req->save();
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Patron edit request rejected',
-            "Request #{$req->id}",
-            route('students.pending.requests'),
-            'patron',
-            $req,
-        );
-
         return back()->with('success', 'Request rejected.');
     }
 
     public function pendingRequests(Request $request)
     {
         $search = $request->search;
-
-        $perPage = PerPage::resolve($request, 10);
 
         $pending = StudentEditRequest::with('student')
             ->where('status', 'pending')
@@ -653,8 +544,7 @@ class StudentController extends Controller
                 });
             })
             ->latest()
-            ->paginate($perPage, ['*'], 'pending_page')
-            ->withQueryString();
+            ->paginate(10, ['*'], 'pending_page');
 
         $logs = StudentEditRequest::with('student')
             ->whereIn('status', ['approved', 'rejected'])
@@ -665,8 +555,7 @@ class StudentController extends Controller
                 });
             })
             ->latest()
-            ->paginate($perPage, ['*'], 'logs_page')
-            ->withQueryString();
+            ->paginate(10, ['*'], 'logs_page');
 
         return view('students.pending_requests', compact('pending', 'logs', 'search'));
     }
@@ -741,54 +630,6 @@ class StudentController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    public function exportTemplate()
-    {
-        $fileName = 'students_import_template.csv';
-
-        $headers = [
-            'Content-type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename={$fileName}",
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate',
-            'Expires' => '0',
-        ];
-
-        $columns = [
-            'ID Number',
-            'Last Name',
-            'First Name',
-            'Middle Initial',
-            'Birthday',
-            'QR Code',
-            'Course',
-            'Year',
-            'Mobile Number',
-            'Address',
-        ];
-
-        $sampleRow = [
-            '24-12345',
-            'Dela Cruz',
-            'Juan',
-            'P',
-            '2004-01-15',
-            'S-00000001',
-            'BSIT',
-            '1st Year',
-            '09171234567',
-            'Kabacan, Cotabato',
-        ];
-
-        $callback = function () use ($columns, $sampleRow) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $columns);
-            fputcsv($file, $sampleRow);
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
-    }
-
     public function import(Request $request)
     {
         $request->validate([
@@ -796,14 +637,6 @@ class StudentController extends Controller
         ]);
 
         Excel::import(new StudentsImport, $request->file('file'));
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_PATRON,
-            'Students imported',
-            'Bulk import from spreadsheet',
-            route('students.index'),
-            'patron',
-        );
 
         return redirect()->back()->with('success', 'Students imported successfully.');
     }

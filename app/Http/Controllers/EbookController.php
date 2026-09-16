@@ -5,9 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Ebook;
 use App\Models\Program;
 use App\Models\ProgramCourse;
-use App\Models\AdminActivity;
-use App\Services\AdminActivityLogger;
-use App\Support\PerPage;
 use Illuminate\Http\Request;
 
 class EbookController extends Controller
@@ -18,38 +15,38 @@ class EbookController extends Controller
     public function index(Request $request)
     {
         $query = Ebook::with(['program', 'course']);
-    
+
         // Apply filters based on dropdown selections
         if ($request->filled('title')) {
             $query->where('title', $request->title);
         }
-    
+
         if ($request->filled('author')) {
             $query->where('author', $request->author);
         }
-    
+
         if ($request->filled('year')) {
             $query->where('publication_year', $request->year);
         }
-    
+
         if ($request->filled('publisher')) {
             $query->where('publisher', $request->publisher);
         }
-    
+
         if ($request->filled('source')) {
             $query->where('source', $request->source);
         }
-    
+
         // New: program & course filters
         if ($request->filled('program_id')) {
             $query->where('program_id', $request->program_id);
         }
-    
+
         if ($request->filled('course_id')) {
             $query->where('course_id', $request->course_id);
         }
-    
-        $ebooks = $query->latest()->paginate(PerPage::resolve($request, 15))->withQueryString();
+
+        $ebooks = $query->latest()->paginate(15)->withQueryString();
 
         return view('ebooks.index', [
             'ebooks' => $ebooks,
@@ -64,7 +61,6 @@ class EbookController extends Controller
         ]);
     }
 
-
     /**
      * Show the form for creating a new resource.
      */
@@ -74,7 +70,6 @@ class EbookController extends Controller
 
         return view('ebooks.create', compact('programs'));
     }
-
 
     /**
      * Store a newly created resource in storage.
@@ -88,8 +83,8 @@ class EbookController extends Controller
             'publisher' => 'nullable|string|max:255',
             'source' => 'nullable|string|max:255',
             'link' => 'nullable|url|max:255',
-            'program_id' => 'nullable|exists:programs,id',
-            'course_id' => 'nullable|exists:program_courses,id',
+            'program_id' => 'nullable|exists:library_programs,id',
+            'course_id' => 'nullable|exists:library_program_courses,id',
         ]);
 
         // Handle "all" for program
@@ -97,16 +92,7 @@ class EbookController extends Controller
             $validated['program_id'] = null;
         }
 
-        $ebook = Ebook::create($validated);
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_EBOOK,
-            'E-book added',
-            "«{$ebook->title}»",
-            route('ebooks.edit', $ebook->id),
-            'book',
-            $ebook,
-        );
+        Ebook::create($validated);
 
         return redirect()->route('ebooks.index')
             ->with('success', 'E-Book added successfully!');
@@ -123,8 +109,8 @@ class EbookController extends Controller
             'publisher' => 'nullable|string|max:255',
             'source' => 'nullable|string|max:255',
             'link' => 'nullable|url|max:255',
-            'program_id' => 'nullable|exists:programs,id',
-            'course_id' => 'nullable|exists:program_courses,id',
+            'program_id' => 'nullable|exists:library_programs,id',
+            'course_id' => 'nullable|exists:library_program_courses,id',
         ]);
 
         // Handle "all" for program
@@ -134,19 +120,9 @@ class EbookController extends Controller
 
         $ebook->update($validated);
 
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_EBOOK,
-            'E-book updated',
-            "«{$ebook->title}»",
-            route('ebooks.edit', $ebook->id),
-            'book',
-            $ebook,
-        );
-
         return redirect()->route('ebooks.index')
             ->with('success', 'E-Book updated successfully.');
     }
-
 
     /**
      * Display the specified resource.
@@ -174,16 +150,7 @@ class EbookController extends Controller
      */
     public function destroy(Ebook $ebook)
     {
-        $title = $ebook->title;
         $ebook->delete();
-
-        AdminActivityLogger::staff(
-            AdminActivity::TYPE_EBOOK,
-            'E-book deleted',
-            "«{$title}»",
-            route('ebooks.index'),
-            'book',
-        );
 
         return redirect()->route('ebooks.index')->with('success', 'E-Book deleted successfully!');
     }
@@ -210,6 +177,4 @@ class EbookController extends Controller
 
         return response()->json($courses);
     }
-
-
 }

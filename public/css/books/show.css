@@ -146,11 +146,6 @@
     color: #991b1b;
 }
 
-.book-show__badge--reserved {
-    background: #fef3c7;
-    color: #92400e;
-}
-
 .book-show__programs {
     display: flex;
     flex-wrap: wrap;

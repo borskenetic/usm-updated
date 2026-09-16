@@ -1,16 +1,16 @@
 /* Circulation admin module — form emphasis & section styling */
 
 .circ-admin {
-    --circ-student: #0d6efd;
-    --circ-student-bg: #eef4ff;
-    --circ-student-border: #bfd7ff;
+    --circ-student: #1b5e20;
+    --circ-student-bg: #e8f5e9;
+    --circ-student-border: #a5d6a7;
     --circ-staff: #6f42c1;
     --circ-staff-bg: #f3ecff;
     --circ-staff-border: #d4c2f5;
     --circ-renewal: #e67e22;
     --circ-renewal-bg: #fff6ec;
     --circ-renewal-border: #ffd7ae;
-    --circ-general: #198754;
+    --circ-general: #1b5e20;
     --circ-general-bg: #edf9f1;
     --circ-general-border: #b9e4c7;
     --circ-search: #0dcaf0;
@@ -161,8 +161,8 @@
 
 .circ-form-field .form-control:focus,
 .circ-form-field .form-select:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+    border-color: #1b5e20;
+    box-shadow: 0 0 0 0.15rem rgba(27, 94, 32, 0.15);
 }
 
 .circ-form-field .form-text {
@@ -253,15 +253,27 @@
     margin-top: 1.25rem;
     padding: 1rem 1.15rem;
     border-radius: 0.9rem;
-    background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
-    border: 2px solid #bfd7ff;
-    box-shadow: 0 0.65rem 1.75rem rgba(13, 110, 253, 0.15);
+    background: linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%);
+    border: 2px solid #a5d6a7;
+    box-shadow: 0 0.65rem 1.75rem rgba(27, 94, 32, 0.12);
 }
 
 .circ-policy-save-bar .btn-primary {
+    --bs-btn-bg: #1b5e20;
+    --bs-btn-border-color: #1b5e20;
+    --bs-btn-hover-bg: #145218;
+    --bs-btn-hover-border-color: #145218;
+    background-color: #1b5e20 !important;
+    border-color: #1b5e20 !important;
     font-weight: 700;
     padding: 0.6rem 1.5rem;
-    box-shadow: 0 0.35rem 0.9rem rgba(13, 110, 253, 0.25);
+    box-shadow: 0 0.35rem 0.9rem rgba(27, 94, 32, 0.25);
+}
+
+.circ-policy-save-bar .btn-primary:hover,
+.circ-policy-save-bar .btn-primary:focus {
+    background-color: #145218 !important;
+    border-color: #145218 !important;
 }
 
 .circ-policy-pills .nav-link {
@@ -276,14 +288,14 @@
 }
 
 .circ-policy-pills .nav-link:hover {
-    background: #e9ecef;
-    color: #212529;
+    background: #e8f5e9;
+    color: #1b5e20;
 }
 
 .circ-policy-pills .nav-link.active {
-    background: #0d6efd;
+    background: #1b5e20;
     color: #fff;
-    box-shadow: 0 0.25rem 0.75rem rgba(13, 110, 253, 0.25);
+    box-shadow: 0 0.25rem 0.75rem rgba(27, 94, 32, 0.25);
 }
 
 .circ-policy-tab-card {
@@ -393,7 +405,7 @@
     padding: 0.55rem 0.75rem;
     border-radius: 0.6rem;
     border-width: 1px;
-    box-shadow: 0 0.2rem 0.6rem rgba(13, 110, 253, 0.1);
+    box-shadow: 0 0.2rem 0.6rem rgba(27, 94, 32, 0.1);
     bottom: 0.5rem;
 }
 

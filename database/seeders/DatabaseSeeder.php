@@ -2,10 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Models\Student;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Database\Seeders\MarcFrameworkSeeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,27 +15,65 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        if (app()->isProduction()) {
+            throw new \RuntimeException(
+                'Demo seeders are disabled in production. Use system:bootstrap-super-admin for initial access.'
+            );
+        }
+
         $this->call([
+            RoleSeeder::class,
             MarcFrameworkSeeder::class,
             ProspectusSeeder::class,
             EmployeeSampleSeeder::class,
+            FacultySampleSeeder::class,
+            ClassroomSampleSeeder::class,
             StudentSampleSeeder::class,
-            AttendanceSampleSeeder::class,
-            FeedbackSampleSeeder::class,
             BookSampleSeeder::class,
-            LibraryHoldingsReportSampleSeeder::class,
+            RoomSampleSeeder::class,
+            FineSettingSeeder::class,
+            SuperAdminSeeder::class,
+            DemoWorkflowSeeder::class,
+            AttendanceLogSeeder::class,
         ]);
 
-        User::updateOrCreate(
-            ['email' => 'test@example.com'],
+        $adminPassword = Hash::make('password', [
+            'rounds' => 12,
+        ]);
+
+        $adminUser = User::updateOrCreate(
+            ['email' => 'admin@test.local'],
             [
-                'fname' => 'Test',
-                'lname' => 'User',
-                'password' => bcrypt('password'),
-                'role' => 'admin',
+                'fname' => 'PANTAS',
+                'lname' => 'Admin',
+                'password' => $adminPassword,
+                'role' => 'library_admin',
+                'student_id' => null,
+                'is_active' => true,
             ]
         );
+        $adminUser->syncRoles(['library_admin']);
 
-        $this->command?->info('Database seeded: MARC framework, programs, students, attendance logs, feedback, books, test user (test@example.com).');
+        $mobileStudent = Student::query()
+            ->where('id_number', '24-10003')
+            ->first();
+
+        if ($mobileStudent) {
+            User::updateOrCreate(
+                ['email' => 'mobile.student@test.local'],
+                [
+                    'fname' => $mobileStudent->firstname,
+                    'lname' => $mobileStudent->lastname,
+                    'password' => Hash::make('password', [
+                        'rounds' => 12,
+                    ]),
+                    'role' => 'student',
+                    'student_id' => null,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        $this->command?->info('Database seeded: MARC framework, programs, students, books, rooms, admin user, and mobile student user.');
     }
 }

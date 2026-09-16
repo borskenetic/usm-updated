@@ -4,14 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Log;
 
 class RoomReservation extends Model
 {
     use HasFactory;
 
+    protected $table = 'library_room_reservations';
+
     protected $fillable = [
         'room_id',
+        'user_id',
+        'student_id',
         'status',
         'date',
         'start_time',
@@ -28,6 +31,16 @@ class RoomReservation extends Model
     public function room()
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function student()
+    {
+        return $this->belongsTo(Student::class);
     }
 
     public function students()

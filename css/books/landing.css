@@ -682,62 +682,42 @@ footer {
     }
 }
 
-.opac-patron-reserved {
-    color: #ca8a04;
-    font-weight: 700;
+/* OPAC search input/icon responsive alignment */
+.opac-search-input-wrap {
+    width: 100%;
+    min-width: 0;
 }
 
-.opac-links-block {
-    padding: 0 1.25rem clamp(2rem, 4vw, 2.75rem);
-    background: #fff;
-    border-top: 1px solid #e8edf2;
+.opac-search-icon {
+    top: 15px;
 }
 
-.opac-links-inner {
-    max-width: 1180px;
-    margin: 0 auto;
+.opac-search-main-input {
+    min-width: 0;
+    margin-bottom: 0 !important;
 }
 
-.opac-links-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
+@media (max-width: 575px) {
+    .opac-search-input-wrap {
+        align-items: stretch;
+        gap: 10px;
+    }
 
-.opac-link-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    min-width: 140px;
-    padding: 1rem 1.25rem;
-    border-radius: 12px;
-    border: 1px solid #e8edf2;
-    background: #f8fafc;
-    text-decoration: none;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-}
+    .opac-search-icon {
+        top: 15px;
+        left: 16px;
+    }
 
-.opac-link-card:hover {
-    transform: translateY(-3px);
-    border-color: #cbd5e1;
-    box-shadow: 0 10px 24px rgba(15, 42, 92, 0.1);
-}
+    .opac-search-main-input {
+        flex: 1 0 100%;
+        width: 100%;
+        max-width: 100%;
+    }
 
-.opac-link-card__img {
-    max-height: 56px;
-    max-width: 120px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-}
-
-.opac-link-card__label {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #334155;
+    .opac-search-submit-btn {
+        flex: 1 0 100%;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
 }

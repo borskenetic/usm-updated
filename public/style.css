@@ -463,7 +463,17 @@
     align-items: flex-end;
     justify-content: center;
     padding: clamp(28px, 6vw, 76px) clamp(16px, 5vw, 72px);
-    background: #052c17;
+    background: #052c17 url('img/kplrc_banner_2-2048x881.png') center / cover no-repeat;
+}
+
+.hero-section.video-fallback .bg-video,
+.zendy-banner.video-fallback .bg-video {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.zendy-banner.video-fallback {
+    background: #052c17 url('img/kplrc_banner_2-2048x881.png') center / cover no-repeat;
 }
 
 .bg-video {

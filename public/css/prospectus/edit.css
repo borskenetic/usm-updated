@@ -5,6 +5,6 @@
 .btn{
     margin-top: 20px;
 }
-.legacy-page-content * {
+* {
     border-radius: 0 !important;
 }

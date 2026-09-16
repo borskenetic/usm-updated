@@ -6,8 +6,6 @@ window.selectedBook = null;
 window.selectedStudent = null;
 window.selectedBooks = null;
 window.opacDetailPayload = null;
-window.studentModalMode = 'checkout';
-window.pendingReserveCopyId = null;
 
 const track = document.getElementById('carouselTrack');
 let scrollAmount = 0;
@@ -55,15 +53,7 @@ function bindOpacTabsOnce() {
     });
 }
 
-function addCopyToCartFromHoldings(copyId, title, author, availability, roomUseOnly, patronHold) {
-    if (roomUseOnly) {
-        showToast('This copy is for room use only and cannot be added to cart.', 'error');
-        return;
-    }
-    if (patronHold) {
-        showToast('This copy is reserved for another patron.', 'error');
-        return;
-    }
+function addCopyToCartFromHoldings(copyId, title, author, availability) {
     if (availability !== 'Available') {
         showToast('This copy is not available.', 'error');
         return;
@@ -90,7 +80,10 @@ function renderHoldingsTable(copies, group) {
     copies.forEach((c) => {
         const tr = document.createElement('tr');
         tr.dataset.copyId = c.id;
-        const actionsCell = buildHoldingsActionsCell(c);
+        const cartCell =
+            c.availability === 'Available'
+                ? '<button type="button" class="btn btn-sm btn-dark opac-add-cart-copy">Add to cart</button>'
+                : '<span class="text-muted small">—</span>';
         tr.innerHTML = `
             <td>${escHtml(c.accession_no ?? '—')}</td>
             <td>${escHtml(c.call_number ?? '—')}</td>
@@ -99,72 +92,17 @@ function renderHoldingsTable(copies, group) {
             <td>${escHtml(c.collection ?? '—')}</td>
             <td>${escHtml(c.shelving_location ?? '—')}</td>
             <td>${escHtml(c.circulation_type ?? '—')}</td>
-            <td>${formatHoldingsStatus(c)}</td>
+            <td>${escHtml(c.circulation_status ?? '—')}</td>
             <td>${escHtml(c.barcode ?? '—')}</td>
             <td>${escHtml(c.rfid ?? '—')}</td>
-            <td>${actionsCell}</td>
+            <td>${cartCell}</td>
         `;
         tr.querySelector('.opac-add-cart-copy')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            addCopyToCartFromHoldings(c.id, title, author, c.availability, c.reserved, c.patron_hold);
-        });
-        tr.querySelector('.opac-reserve-copy')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openStudentModalForReserve(c.id);
-        });
-        tr.querySelector('.opac-checkout-hold')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.studentModalMode = 'checkout';
-            window.selectedBook = {
-                id: Number(c.id),
-                title,
-                author: author || '',
-                availability: c.availability,
-            };
-            openStudentModal();
+            addCopyToCartFromHoldings(c.id, title, author, c.availability);
         });
         tbody.appendChild(tr);
     });
-}
-
-function formatHoldingsStatus(copy) {
-    if (copy.patron_hold) {
-        const waiting = copy.patron_hold_status === 'pending' ? ' <span class="text-muted small">(waiting)</span>' : '';
-        return `<span class="opac-patron-reserved">Reserved</span>${waiting}`;
-    }
-    return escHtml(copy.circulation_status ?? '—');
-}
-
-function buildHoldingsActionsCell(copy) {
-    if (copy.reserved) {
-        return '<span class="text-muted small">Room use only</span>';
-    }
-    if (copy.patron_hold) {
-        return '<span class="opac-patron-reserved">Reserved</span>';
-    }
-    if (copy.availability === 'On Hold') {
-        return '<div class="d-flex flex-wrap gap-1 align-items-center">'
-            + '<button type="button" class="btn btn-sm btn-primary opac-checkout-hold">Self check-out</button>'
-            + '<span class="opac-patron-reserved">On hold</span></div>';
-    }
-
-    const parts = [];
-    if (copy.availability === 'Available') {
-        parts.push('<button type="button" class="btn btn-sm btn-dark opac-add-cart-copy">Add to cart</button>');
-    }
-    if (copy.availability === 'Available' || copy.availability === 'Borrowed') {
-        parts.push('<button type="button" class="btn btn-sm btn-outline-warning opac-reserve-copy">Reserve</button>');
-    }
-    if (parts.length) {
-        return '<div class="d-flex flex-wrap gap-1">' + parts.join('') + '</div>';
-    }
-    return '<span class="text-muted small">—</span>';
-}
-
-function openStudentModalForReserve(copyId) {
-    window.studentModalMode = 'reserve';
-    window.pendingReserveCopyId = Number(copyId);
-    openStudentModal();
 }
 
 function renderDescriptionDl(desc) {
@@ -273,7 +211,7 @@ function showBookModalReady() {
 
 function openBookModalShell() {
     bindOpacTabsOnce();
-    setOpacTab('description');
+    setOpacTab('holdings');
     const modal = document.getElementById('bookModal');
     if (modal) modal.style.display = 'flex';
     showBookModalLoading();
@@ -358,26 +296,15 @@ function openStudentModal() {
     const input = document.getElementById('studentIdInput');
     const err = document.getElementById('studentError');
     const modal = document.getElementById('studentModal');
-    const titleEl = document.getElementById('studentModalTitle');
-    const confirmBtn = document.getElementById('studentModalConfirmBtn');
     if (!input || !modal) return;
     input.value = '';
     if (err) err.style.display = 'none';
-    if (window.studentModalMode === 'reserve') {
-        if (titleEl) titleEl.textContent = 'Reserve copy';
-        if (confirmBtn) confirmBtn.textContent = 'Confirm reservation';
-    } else {
-        if (titleEl) titleEl.textContent = 'Self Check-Out';
-        if (confirmBtn) confirmBtn.textContent = 'Confirm Checkout';
-    }
     modal.style.display = 'flex';
 }
 
 function closeStudentModal() {
     const el = document.getElementById('studentModal');
     if (el) el.style.display = 'none';
-    window.studentModalMode = 'checkout';
-    window.pendingReserveCopyId = null;
 }
 
 function markBorrowedInUi(bookId) {
@@ -400,18 +327,29 @@ function markBorrowedInUi(bookId) {
     }
 }
 
-function runCheckoutRequest(studentId, booksToCheckout, loanTerms) {
+function confirmCheckout() {
+    const studentId = document.getElementById('studentIdInput').value.trim();
+
+    if (!studentId) {
+        showToast('Please enter your Student ID.', 'error');
+        return;
+    }
+
+    let booksToCheckout = [];
+
+    if (window.cart && window.cart.length > 0) {
+        booksToCheckout = window.cart;
+    } else if (window.selectedBook) {
+        booksToCheckout = [window.selectedBook];
+    } else {
+        showToast('No book selected.', 'error');
+        return;
+    }
+
     if (!window.CHECKOUT_URL || !window.CSRF_TOKEN) {
         showToast('Checkout is not configured.', 'error');
         return;
     }
-
-    const payload = {
-        student_id: studentId,
-        books: booksToCheckout
-    };
-    if (loanTerms?.due_date) payload.due_date = loanTerms.due_date;
-    if (loanTerms?.loan_duration_days) payload.loan_duration_days = loanTerms.loan_duration_days;
 
     fetch(window.CHECKOUT_URL, {
         method: 'POST',
@@ -420,7 +358,10 @@ function runCheckoutRequest(studentId, booksToCheckout, loanTerms) {
             Accept: 'application/json',
             'X-CSRF-TOKEN': window.CSRF_TOKEN
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+            student_id: studentId,
+            books: booksToCheckout
+        })
     })
         .then((res) => res.json())
         .then((data) => {
@@ -480,96 +421,6 @@ function runCheckoutRequest(studentId, booksToCheckout, loanTerms) {
             } else {
                 showToast('Checkout failed: ' + (data.message || 'Unknown error'), 'error');
             }
-        })
-        .catch((err) => {
-            console.error(err);
-            showToast('Server error occurred.', 'error');
-        });
-}
-
-function confirmCheckout() {
-    if (window.studentModalMode === 'reserve') {
-        confirmReserve();
-        return;
-    }
-
-    const studentId = document.getElementById('studentIdInput').value.trim();
-
-    if (!studentId) {
-        showToast('Please enter your Student ID.', 'error');
-        return;
-    }
-
-    let booksToCheckout = [];
-
-    if (window.cart && window.cart.length > 0) {
-        booksToCheckout = window.cart;
-    } else if (window.selectedBook) {
-        booksToCheckout = [window.selectedBook];
-    } else {
-        showToast('No book selected.', 'error');
-        return;
-    }
-
-    const proceed = typeof promptLoanTerms === 'function'
-        ? promptLoanTerms()
-        : Promise.resolve({});
-
-    proceed.then((loanTerms) => runCheckoutRequest(studentId, booksToCheckout, loanTerms));
-}
-
-function confirmReserve() {
-    const studentId = document.getElementById('studentIdInput')?.value.trim();
-    const copyId = window.pendingReserveCopyId;
-
-    if (!studentId) {
-        showToast('Please enter your Student ID.', 'error');
-        return;
-    }
-    if (!copyId) {
-        showToast('No copy selected for reservation.', 'error');
-        return;
-    }
-    if (!window.RESERVE_URL || !window.CSRF_TOKEN) {
-        showToast('Reservation is not configured.', 'error');
-        return;
-    }
-
-    fetch(window.RESERVE_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-CSRF-TOKEN': window.CSRF_TOKEN,
-        },
-        body: JSON.stringify({
-            student_id: studentId,
-            book_id: copyId,
-        }),
-    })
-        .then((res) => res.json())
-        .then((data) => {
-            if (!data.success) {
-                showToast(data.message || 'Reservation failed.', 'error');
-                return;
-            }
-
-            closeStudentModal();
-
-            if (window.opacDetailPayload && Array.isArray(window.opacDetailPayload.copies)) {
-                const copy = window.opacDetailPayload.copies.find((c) => Number(c.id) === Number(copyId));
-                if (copy) {
-                    copy.patron_hold = true;
-                    copy.patron_hold_status = data.reservation?.status || 'pending';
-                    if (data.reservation?.availability) {
-                        copy.availability = data.reservation.availability;
-                        copy.circulation_status = copy.availability === 'On Hold' ? 'On hold' : copy.circulation_status;
-                    }
-                    renderHoldingsTable(window.opacDetailPayload.copies, window.opacDetailPayload.group);
-                }
-            }
-
-            showToast(data.message || 'Copy reserved.', 'success');
         })
         .catch((err) => {
             console.error(err);

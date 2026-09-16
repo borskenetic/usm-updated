@@ -1,4 +1,4 @@
-@extends('layouts.sec')
+@extends('layouts.sidebar')
 
 @section('styles')
     <link rel="stylesheet" href="{{ asset('css/rooms/rooms.css') }}">
@@ -78,7 +78,7 @@
                 </table>
             </div>
             <div class="p-3 border-top">
-                @include('layouts.partials.pagination_bar', ['paginator' => $logs])
+                {{ $logs->links('pagination::bootstrap-5') }}
             </div>
         @else
             <div class="rooms-empty">
