@@ -12,6 +12,7 @@ use App\Models\ProgramCourse;
 use App\Models\BookMarcField;
 use App\Models\CatalogFramework;
 use App\Models\Setting;
+use App\Models\SublocationPolicy;
 use App\Services\BookMarcDisplay;
 use App\Services\AdminActivityLogger;
 use App\Support\PerPage;
@@ -186,6 +187,24 @@ class BookController extends Controller
            }
        }
 
+       $book->save();
+   }
+
+   /**
+    * Apply circulation flags from the book's 852 $c sublocation policy.
+    */
+   protected function applySublocationPolicyToBook(Book $book): void
+   {
+       $policy = SublocationPolicy::findForSection($book->section);
+       if (! $policy) {
+           return;
+       }
+
+       if ((bool) $book->reserved === (bool) $policy->reserved) {
+           return;
+       }
+
+       $book->reserved = $policy->reserved;
        $book->save();
    }
 
@@ -1087,6 +1106,7 @@ class BookController extends Controller
                 if (! $multipleCopies) {
                     $book = Book::create($shared);
                     $this->saveMarcFieldsForBook($book, $framework, $marc);
+                    $this->applySublocationPolicyToBook($book);
                     $this->assertCopyUniqueOnBook($book);
 
                     if (! empty($request->program_ids)) {
@@ -1110,6 +1130,7 @@ class BookController extends Controller
                     $book = Book::create($shared);
                     $copyMarc = $this->applyCopyIdentifiersToMarc($marc, $copy);
                     $this->saveMarcFieldsForBook($book, $framework, $copyMarc);
+                    $this->applySublocationPolicyToBook($book);
                     $this->assertCopyUniqueOnBook($book);
 
                     if (! empty($request->program_ids)) {
@@ -1268,6 +1289,7 @@ class BookController extends Controller
 
             $book->update($data);
             $this->saveMarcFieldsForBook($book, $framework, $marc);
+            $this->applySublocationPolicyToBook($book);
             $this->assertCopyUniqueOnBook($book);
 
             if (! empty($request->program_ids)) {

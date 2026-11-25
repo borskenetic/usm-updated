@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\FineSetting;
 use App\Models\Holiday;
+use App\Models\SublocationPolicy;
 use Carbon\Carbon;
 
 class LoanDueDate
@@ -37,6 +38,7 @@ class LoanDueDate
         ?string $dueDateInput,
         ?int $loanDaysInput,
         bool $isEmployee = false,
+        ?string $section = null,
     ): array {
         if ($dueDateInput) {
             return [
@@ -52,9 +54,7 @@ class LoanDueDate
             ];
         }
 
-        $defaultDays = $settings
-            ? $settings->patronTerms($isEmployee)->loan_duration_days
-            : FineSetting::DEFAULT_LOAN_DURATION_DAYS;
+        $defaultDays = SublocationPolicy::resolvePatronTerms($section, $settings, $isEmployee)->loan_duration_days;
 
         return [
             'due_date' => self::addBusinessDays($borrowedAt, $defaultDays),

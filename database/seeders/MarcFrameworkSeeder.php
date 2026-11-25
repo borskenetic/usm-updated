@@ -74,7 +74,14 @@ class MarcFrameworkSeeder extends Seeder
 
             // Location/call
             ['tag' => '852', 'subfield' => 'b', 'label' => 'Library Name', 'input_type' => 'select', 'options' => ['Basic Education', 'Academic Library'], 'book_column' => 'library_name'],
-            ['tag' => '852', 'subfield' => 'c', 'label' => 'Sublocation / shelving (local)', 'book_column' => 'section'],
+            [
+                'tag' => '852',
+                'subfield' => 'c',
+                'label' => 'Sublocation / shelving (local)',
+                'input_type' => 'select',
+                'options' => ['Circulation', 'Fiction', 'Filipiniana', 'Periodicals', 'Reference', 'Reserve'],
+                'book_column' => 'section',
+            ],
             ['tag' => '852', 'subfield' => 'h', 'label' => 'Call Number', 'book_column' => 'call_number'],
 
             // Item identifiers

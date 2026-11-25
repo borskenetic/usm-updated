@@ -180,11 +180,17 @@
         if (e.key !== 'Enter') return;
         e.preventDefault();
         if (isCooldown) return;
+
+        const payload = input.value.trim().replace(/\r/g, '');
+        input.value = '';
+        if (!payload) return;
+
+        // Hardware readers often fire Enter more than once while the card is held.
         isCooldown = true;
-        setTimeout(() => { isCooldown = false; }, 100);
+        setTimeout(() => { isCooldown = false; }, 3000);
 
         const formData = new FormData();
-        formData.append('qrcode', input.value.trim().replace(/\r/g, ''));
+        formData.append('qrcode', payload);
         formData.append('_token', '{{ csrf_token() }}');
 
         fetch("{{ route('attendance.process') }}", {
@@ -216,7 +222,8 @@
               sidebar.appendChild(div);
 
               const feedbackOn = data.logout_feedback_enabled ?? LOGOUT_FEEDBACK_ENABLED;
-              if (data.status.toLowerCase() === 'out' && feedbackOn) {
+              // Duplicates (debounce) keep the prior status — don't reopen logout feedback.
+              if (data.status.toLowerCase() === 'out' && feedbackOn && !data.duplicate) {
                 showLogoutFeedback();
               } else {
                 scheduleClear(2000);
@@ -244,8 +251,6 @@
               sidebar.appendChild(div);
               scheduleClear(2000);
             }
-
-            input.value = '';
           })
           .catch(err => console.error(err));
       });

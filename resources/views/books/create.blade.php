@@ -181,4 +181,5 @@
 @include('books.partials.catalog_programs_script')
 @include('books.partials.catalog_multicopy_script', ['formId' => 'addBookForm'])
 @include('books.partials.catalog_marc_pickers_script')
+@include('books.partials.catalog_sublocation_policy_script')
 @endsection

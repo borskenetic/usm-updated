@@ -7,11 +7,10 @@ use App\Http\Controllers\SMSController;
 use App\Models\AttendanceLog;
 use App\Models\Student;
 use App\Services\AttendanceSessionService;
-use App\Models\Book;
 use App\Models\Setting;
-use App\Models\BookLog;
 use App\Models\AdminActivity;
 use App\Services\AdminActivityLogger;
+use App\Support\PatronQrResolver;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
@@ -53,141 +52,103 @@ class AttendanceController extends Controller
                 : 'Logout feedback is now disabled on the attendance scanner.'
         );
     }
-    
-    private function parseQr($raw)
+
+    private function studentScanResponse(Student $student, AttendanceLog $log, string $status, bool $duplicate = false)
     {
-        $raw = trim(str_replace("\r", "", $raw));
-    
-        // Case 3: multiline format
-        if (str_contains($raw, "\n")) {
-            $lines = array_values(array_filter(array_map('trim', explode("\n", $raw))));
-    
-            return [
-                'student_no' => $lines[0] ?? null,
-                'full_name'  => $lines[1] ?? null,
-                'course'     => $lines[2] ?? null,
-            ];
-        }
-    
-        // Otherwise comma-separated
-        $parts = array_map('trim', explode(',', $raw));
-    
-        // If first part looks like student number (20-80556)
-        if (preg_match('/^\d{2}-\d+$/', $parts[0] ?? '')) {
-            return [
-                'student_no' => $parts[0] ?? null,
-                'full_name'  => $parts[1] ?? null,
-                'course'     => $parts[2] ?? null,
-            ];
-        }
-    
-        // Format 2 (no student number)
-        return [
-            'student_no' => null,
-            'full_name'  => $parts[0] ?? null,
-            'course'     => $parts[1] ?? null,
-        ];
+        return response()->json([
+            'type' => 'student',
+            'student_id' => $student->id,
+            'duplicate' => $duplicate,
+            'student' => [
+                'firstname' => $student->firstname,
+                'lastname' => $student->lastname,
+                'profile_picture' => $student->profile_picture,
+            ],
+            'status' => $status,
+            'logout_feedback_enabled' => Setting::logoutFeedbackEnabled(),
+            'log' => [
+                'scanned_at' => Carbon::parse($log->scanned_at)->timezone('Asia/Manila')->format('Y-m-d h:i:s A'),
+            ],
+        ]);
     }
 
     public function scan(Request $request)
     {
         $request->validate(['qrcode' => 'required|string']);
 
-        $token = trim(str_replace("\r", '', $request->qrcode));
-        $student = Student::where('qrcode', $token)->first();
+        $resolved = app(PatronQrResolver::class)->resolve($request->qrcode);
+        $student = $resolved['student'];
 
-        $parsed = $this->parseQr($request->qrcode);
-
-        // ID number from multiline / comma format
-        if (! $student && $parsed['student_no']) {
-            $student = Student::where('id_number', $parsed['student_no'])->first();
-        }
-
-        if (! $student && $parsed['full_name']) {
-
-            $qrName = strtoupper($parsed['full_name']);
-            $qrName = preg_replace('/[^A-Z\s]/', '', $qrName);
-            $qrName = preg_replace('/\b[A-Z]\b/', '', $qrName);
-            $qrName = preg_replace('/\s+/', '', $qrName);
-        
-            $student = Student::where('normalized_name', $qrName)->first();
-        }
-        
-        if ($student) {
-            app(AttendanceSessionService::class)->closeStaleOpenInForStudent($student);
-
-            $lastLog = AttendanceLog::where('student_id', $student->id)
-                ->orderByDesc('scanned_at')
-                ->orderByDesc('id')
-                ->first();
-
-            $sessions = app(AttendanceSessionService::class);
-            $newStatus = ($lastLog && $sessions->isInStatus($lastLog->status)) ? 'OUT' : 'IN';
-
-            $log = AttendanceLog::create([
-                'student_id' => $student->id,
-                'status' => $newStatus,
-                'scanned_at' => Carbon::now('Asia/Manila'),
-            ]);
-            
-            // Send attendance SMS
-            if (!empty($student->mobile_number)) {
-            
-                $template = Setting::where('key', 'scan_sms')->value('value')
-                    ?? 'Hello {name}, you scanned {status} at the library at {time}.';
-            
-                $message = str_replace(
-                    ['{name}', '{status}', '{time}'],
-                    [
-                        trim($student->firstname . ' ' . $student->lastname),
-                        $newStatus,
-                        Carbon::now('Asia/Manila')->format('h:i A'),
-                    ],
-                    $template
-                );
-            
-                app(SMSController::class)->sendDirect(
-                    $student->mobile_number,
-                    $message
-                );
-            }
-    
+        if (! $student) {
             return response()->json([
-                'type' => 'student',
-                'student_id' => $student->id,
-                'student' => [
-                    'firstname' => $student->firstname,
-                    'lastname' => $student->lastname,
-                    'profile_picture' => $student->profile_picture,
-                ],
-                'status' => $newStatus,
-                'logout_feedback_enabled' => Setting::logoutFeedbackEnabled(),
-                'log' => [
-                    'scanned_at' => $log->scanned_at->format('Y-m-d h:i:s A'),
-                ],
+                'type' => 'error',
+                'message' => $resolved['reason'] ?? 'RFID not recognized.',
             ]);
         }
 
-    
-        // Neither
-        return response()->json([
-            'type' => 'error',
-            'message' => 'RFID not recognized.'
+        $sessions = app(AttendanceSessionService::class);
+        $sessions->closeStaleOpenInForStudent($student);
+
+        // Same card held at the reader / double Enter → do not flip IN/OUT again.
+        $recent = $sessions->recentScanWithin($student);
+        if ($recent) {
+            return $this->studentScanResponse(
+                $student,
+                $recent,
+                strtoupper(trim((string) $recent->status)),
+                true
+            );
+        }
+
+        $lastLog = AttendanceLog::where('student_id', $student->id)
+            ->orderByDesc('scanned_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $newStatus = ($lastLog && $sessions->isInStatus($lastLog->status)) ? 'OUT' : 'IN';
+
+        $log = AttendanceLog::create([
+            'student_id' => $student->id,
+            'status' => $newStatus,
+            'scanned_at' => Carbon::now('Asia/Manila'),
         ]);
+
+        if (! empty($student->mobile_number)) {
+            $template = Setting::where('key', 'scan_sms')->value('value')
+                ?? 'Hello {name}, you scanned {status} at the library at {time}.';
+
+            $message = str_replace(
+                ['{name}', '{status}', '{time}'],
+                [
+                    trim($student->firstname.' '.$student->lastname),
+                    $newStatus,
+                    Carbon::now('Asia/Manila')->format('h:i A'),
+                ],
+                $template
+            );
+
+            app(SMSController::class)->sendDirect(
+                $student->mobile_number,
+                $message
+            );
+        }
+
+        return $this->studentScanResponse($student, $log, $newStatus);
     }
 
-    
     // Show the change video page
-    public function showChangeVideo() {
+    public function showChangeVideo()
+    {
         return view('attendance.change_video');
     }
-    
+
     // Handle video upload
-    public function uploadVideo(Request $request) {
+    public function uploadVideo(Request $request)
+    {
         $request->validate([
             'video' => 'required|file|mimes:mp4|max:512000', // 500MB
         ]);
-    
+
         $video = $request->file('video');
         $filename = 'area51_product_slideshow.mp4'; // overwrite existing
         $video->move(base_path('videos'), $filename);
@@ -199,8 +160,7 @@ class AttendanceController extends Controller
             route('attendance.changeVideo'),
             'staff',
         );
-    
+
         return redirect()->route('attendance.changeVideo')->with('success', 'Video uploaded successfully!');
     }
-
 }

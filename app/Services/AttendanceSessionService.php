@@ -11,9 +11,28 @@ class AttendanceSessionService
 {
     public const TZ = 'Asia/Manila';
 
+    /** Ignore repeat scans of the same patron within this window (seconds). */
+    public const SCAN_DEBOUNCE_SECONDS = 5;
+
     public function isInStatus(?string $status): bool
     {
         return $status !== null && strtolower(trim((string) $status)) === 'in';
+    }
+
+    /**
+     * Last log for this patron if it was recorded within the debounce window.
+     */
+    public function recentScanWithin(Student $student, ?int $seconds = null): ?AttendanceLog
+    {
+        $seconds = $seconds ?? self::SCAN_DEBOUNCE_SECONDS;
+        $since = Carbon::now(self::TZ)->subSeconds($seconds);
+
+        return AttendanceLog::query()
+            ->where('student_id', $student->id)
+            ->where('scanned_at', '>=', $since)
+            ->orderByDesc('scanned_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function isOutStatus(?string $status): bool

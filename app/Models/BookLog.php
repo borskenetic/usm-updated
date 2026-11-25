@@ -209,7 +209,11 @@ class BookLog extends Model
             return 0;
         }
 
-        $patronTerms = $settings->patronTerms((bool) $this->employee_id);
+        $patronTerms = SublocationPolicy::resolvePatronTerms(
+            $this->book?->section,
+            $settings,
+            (bool) $this->employee_id
+        );
 
         $compareDate = $this->returned_date
             ? Carbon::parse($this->returned_date)
@@ -245,7 +249,11 @@ class BookLog extends Model
             return 0;
         }
 
-        $patronTerms = $settings->patronTerms((bool) $this->employee_id);
+        $patronTerms = SublocationPolicy::resolvePatronTerms(
+            $this->book?->section,
+            $settings,
+            (bool) $this->employee_id
+        );
         $fine = $this->days_overdue * $patronTerms->fine_per_day;
 
         if (! is_null($patronTerms->max_fine)) {

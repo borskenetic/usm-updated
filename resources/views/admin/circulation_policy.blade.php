@@ -17,7 +17,7 @@
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 circ-policy-page-head">
         <div>
             <h4 class="mb-0">Circulation Policy</h4>
-            <p class="text-muted mb-0 small">Borrow limits, renewals, fines, and holidays.</p>
+            <p class="text-muted mb-0 small">Borrow limits, renewals, fines, sublocations, and holidays.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{{ route('logs.index') }}" class="btn btn-outline-secondary btn-sm">Circulation desk</a>
@@ -51,6 +51,9 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="fines-tab" data-bs-toggle="tab" data-bs-target="#fines-pane" type="button" role="tab" aria-controls="fines-pane" aria-selected="false">Fines &amp; Loans</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sublocations-tab" data-bs-toggle="tab" data-bs-target="#sublocations-pane" type="button" role="tab" aria-controls="sublocations-pane" aria-selected="false">Sublocations</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="holidays-tab" data-bs-toggle="tab" data-bs-target="#holidays-pane" type="button" role="tab" aria-controls="holidays-pane" aria-selected="false">Holidays</button>
@@ -225,6 +228,43 @@
                     @endif
                 </div>
 
+                <div class="tab-pane fade" id="sublocations-pane" role="tabpanel" aria-labelledby="sublocations-tab" tabindex="0">
+                    <div class="circ-form-section mb-0">
+                        <div class="circ-section-heading">
+                            <span class="circ-section-badge" style="color:#0f766e;background:#ecfdf5;border:1px solid #99f6e4;">852 $c</span>
+                            <h6 class="circ-section-title">Policy by sublocation</h6>
+                        </div>
+                        <p class="text-muted small mb-2">
+                            Choosing a sublocation while cataloging applies these rules (room-use flag, loan days, fines).
+                            Leave loan/fine fields blank to use the global Fines &amp; Loans defaults above.
+                        </p>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-2" id="sublocationPolicyTable">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width:8rem">Sublocation</th>
+                                        <th>Room use</th>
+                                        <th>Student loan</th>
+                                        <th>Staff loan</th>
+                                        <th>Student ₱/day</th>
+                                        <th>Staff ₱/day</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sublocationPolicyBody">
+                                    @forelse(($sublocationPolicies ?? []) as $i => $policy)
+                                        @include('admin.partials.sublocation_policy_row', ['index' => $i, 'policy' => $policy])
+                                    @empty
+                                        @include('admin.partials.sublocation_policy_row', ['index' => 0, 'policy' => null])
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="addSublocationPolicyRow">+ Add sublocation</button>
+                    </div>
+                </div>
+
                 <div class="tab-pane fade" id="holidays-pane" role="tabpanel" aria-labelledby="holidays-tab" tabindex="0">
                     <div class="circ-form-section circ-form-section--holiday mb-0">
                         <div class="circ-section-heading">
@@ -273,6 +313,27 @@
                                     <li>₱{{ number_format($employeeTerms->fine_per_day ?? 0, 2) }}/day</li>
                                     <li><strong>{{ $employeeTerms->loan_duration_days ?? '—' }}</strong>d loan</li>
                                     <li><strong>{{ $employeeTerms->grace_period_days ?? 0 }}</strong>d grace</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="circ-summary-tile">
+                                <h6 class="mb-1">Sublocations</h6>
+                                <ul class="small mb-0">
+                                    @forelse(($sublocationPolicies ?? []) as $policy)
+                                        <li>
+                                            <strong>{{ $policy->section }}</strong>
+                                            — {{ $policy->reserved ? 'room use only' : 'circulating' }}
+                                            @if($policy->student_loan_duration_days)
+                                                · student {{ $policy->student_loan_duration_days }}d
+                                            @endif
+                                            @if($policy->employee_loan_duration_days)
+                                                · staff {{ $policy->employee_loan_duration_days }}d
+                                            @endif
+                                        </li>
+                                    @empty
+                                        <li class="text-muted">No sublocation policies yet.</li>
+                                    @endforelse
                                 </ul>
                             </div>
                         </div>
@@ -346,6 +407,75 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     @endif
+
+    const sublocationBody = document.getElementById('sublocationPolicyBody');
+    const addSublocationBtn = document.getElementById('addSublocationPolicyRow');
+
+    function nextSublocationIndex() {
+        return sublocationBody ? sublocationBody.querySelectorAll('.sublocation-policy-row').length : 0;
+    }
+
+    function reindexSublocationRows() {
+        if (!sublocationBody) return;
+        sublocationBody.querySelectorAll('.sublocation-policy-row').forEach(function (row, index) {
+            row.querySelectorAll('[name^="sublocations["]').forEach(function (input) {
+                input.name = input.name.replace(/sublocations\[\d+]/, 'sublocations[' + index + ']');
+            });
+            const sortInput = row.querySelector('input[name$="[sort_order]"]');
+            if (sortInput) sortInput.value = String((index + 1) * 10);
+        });
+    }
+
+    function buildSublocationRow(index) {
+        const tr = document.createElement('tr');
+        tr.className = 'sublocation-policy-row';
+        tr.innerHTML =
+            '<td>' +
+                '<input type="hidden" name="sublocations[' + index + '][id]" value="">' +
+                '<input type="hidden" name="sublocations[' + index + '][sort_order]" value="' + ((index + 1) * 10) + '">' +
+                '<input type="text" name="sublocations[' + index + '][section]" class="form-control form-control-sm" placeholder="e.g. Circulation">' +
+            '</td>' +
+            '<td>' +
+                '<input type="hidden" name="sublocations[' + index + '][reserved]" value="0">' +
+                '<div class="form-check form-switch mb-0">' +
+                    '<input class="form-check-input" type="checkbox" role="switch" name="sublocations[' + index + '][reserved]" value="1">' +
+                '</div>' +
+            '</td>' +
+            '<td><input type="number" name="sublocations[' + index + '][student_loan_duration_days]" class="form-control form-control-sm" min="1" max="365" placeholder="Global"></td>' +
+            '<td><input type="number" name="sublocations[' + index + '][employee_loan_duration_days]" class="form-control form-control-sm" min="1" max="365" placeholder="Global"></td>' +
+            '<td><input type="number" step="0.01" name="sublocations[' + index + '][student_fine_per_day]" class="form-control form-control-sm" min="0" placeholder="Global"></td>' +
+            '<td><input type="number" step="0.01" name="sublocations[' + index + '][employee_fine_per_day]" class="form-control form-control-sm" min="0" placeholder="Global"></td>' +
+            '<td class="text-end">' +
+                '<button type="button" class="btn btn-outline-danger btn-sm remove-sublocation-row" title="Remove">&times;</button>' +
+                '<input type="hidden" name="sublocations[' + index + '][student_max_fine]" value="">' +
+                '<input type="hidden" name="sublocations[' + index + '][employee_max_fine]" value="">' +
+                '<input type="hidden" name="sublocations[' + index + '][student_grace_period_days]" value="">' +
+                '<input type="hidden" name="sublocations[' + index + '][employee_grace_period_days]" value="">' +
+            '</td>';
+        return tr;
+    }
+
+    addSublocationBtn?.addEventListener('click', function () {
+        if (!sublocationBody) return;
+        sublocationBody.appendChild(buildSublocationRow(nextSublocationIndex()));
+    });
+
+    sublocationBody?.addEventListener('click', function (event) {
+        const btn = event.target.closest('.remove-sublocation-row');
+        if (!btn) return;
+        const row = btn.closest('.sublocation-policy-row');
+        if (!row) return;
+        if (sublocationBody.querySelectorAll('.sublocation-policy-row').length <= 1) {
+            row.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (input) {
+                input.value = '';
+            });
+            const reserved = row.querySelector('input[type="checkbox"]');
+            if (reserved) reserved.checked = false;
+            return;
+        }
+        row.remove();
+        reindexSublocationRows();
+    });
 });
 </script>
 @endsection

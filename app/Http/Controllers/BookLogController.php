@@ -10,6 +10,7 @@ use App\Services\AdminActivityLogger;
 use App\Models\FineSetting;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\SublocationPolicy;
 use App\Support\LoanDueDate;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -371,6 +372,7 @@ class BookLogController extends Controller
                 $request->input('due_date'),
                 $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null,
                 (bool) $employeeId,
+                $book->section,
             );
             $dueDate = $loanTerms['due_date'];
         }
@@ -382,9 +384,11 @@ class BookLogController extends Controller
                 $dueDate = $lastLog->due_date;
 
                 $isEmployeePatron = (bool) ($employeeId ?: $lastLog?->employee_id);
-                $patronTerms = $settings
-                    ? $settings->patronTerms($isEmployeePatron)
-                    : (object) ['grace_period_days' => 0, 'fine_per_day' => 0, 'max_fine' => null];
+                $patronTerms = SublocationPolicy::resolvePatronTerms(
+                    $book->section,
+                    $settings,
+                    $isEmployeePatron
+                );
                 $gracePeriod = $patronTerms->grace_period_days ?? 0;
                 $finePerDay = $patronTerms->fine_per_day ?? 0;
                 $maxFine = $patronTerms->max_fine;
@@ -498,7 +502,11 @@ class BookLogController extends Controller
 
         $settings = FineSetting::latest('created_at')->first();
         $isEmployee = (bool) $lastLog->employee_id;
-        $loanDays = (int) ($settings?->patronTerms($isEmployee)->loan_duration_days ?? FineSetting::DEFAULT_LOAN_DURATION_DAYS);
+        $loanDays = (int) SublocationPolicy::resolvePatronTerms(
+            $book->section,
+            $settings,
+            $isEmployee
+        )->loan_duration_days;
 
         $base = Carbon::parse($lastLog->due_date, 'Asia/Manila');
         $newDue = $this->addBusinessDays($base, $loanDays);
@@ -642,8 +650,10 @@ class BookLogController extends Controller
             ->get()
             ->keyBy('book_id');
 
+        $fineSettings = FineSetting::latest('created_at')->first();
+
         return response()->json(
-            $books->map(function ($b) use ($patronHolds) {
+            $books->map(function ($b) use ($patronHolds, $fineSettings) {
                 $lastCheckout = BookLog::with(['student', 'employee'])
                     ->where('book_id', $b->id)
                     ->where('status', 'Checked Out')
@@ -653,6 +663,8 @@ class BookLogController extends Controller
                 $hold = $patronHolds->get($b->id);
                 $holdStudent = $hold?->student;
 
+                $sectionPolicy = SublocationPolicy::findForSection($b->section);
+
                 return [
                     'id' => $b->id,
                     'title' => $b->title_statement,
@@ -660,10 +672,22 @@ class BookLogController extends Controller
                     'accession_no' => $b->accession_no,
                     'barcode' => $b->barcode,
                     'rfid' => $b->rfid,
+                    'section' => $b->section,
                     'copy_identifier' => $b->copyIdentifierForCirculation(),
                     'copy_identifier_summary' => $b->copyIdentifierSummary(),
                     'availability' => $b->availability,
                     'reserved' => (bool) $b->reserved,
+                    'section_policy' => $sectionPolicy?->toCatalogPayload(),
+                    'loan_duration_days_student' => SublocationPolicy::resolvePatronTerms(
+                        $b->section,
+                        $fineSettings,
+                        false
+                    )->loan_duration_days,
+                    'loan_duration_days_employee' => SublocationPolicy::resolvePatronTerms(
+                        $b->section,
+                        $fineSettings,
+                        true
+                    )->loan_duration_days,
                     'patron_hold' => (bool) $hold,
                     'patron_hold_status' => $hold?->status,
                     'reservation_student_id' => $holdStudent?->id,

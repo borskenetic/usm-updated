@@ -130,14 +130,8 @@ class CheckoutController extends Controller
             }
 
             $borrowedAt = Carbon::now('Asia/Manila');
-            $loanTerms = LoanDueDate::resolveFromRequest(
-                $borrowedAt,
-                $fineSetting,
-                $request->input('due_date'),
-                $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null,
-                false,
-            );
-            $dueDate = $loanTerms['due_date'];
+            $sharedDueDateInput = $request->input('due_date');
+            $sharedLoanDays = $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null;
             $processedBooks = [];
 
             foreach ($availableIds as $bookId) {
@@ -163,6 +157,16 @@ class CheckoutController extends Controller
                         continue;
                     }
                 }
+
+                $loanTerms = LoanDueDate::resolveFromRequest(
+                    $borrowedAt,
+                    $fineSetting,
+                    $sharedDueDateInput,
+                    $sharedLoanDays,
+                    false,
+                    $book->section,
+                );
+                $dueDate = $loanTerms['due_date'];
 
                 BookLog::create([
                     'book_id' => $book->id,
@@ -305,14 +309,8 @@ class CheckoutController extends Controller
         }
 
         $borrowedAt = Carbon::now('Asia/Manila');
-        $loanTerms = LoanDueDate::resolveFromRequest(
-            $borrowedAt,
-            $fineSetting,
-            $request->input('due_date'),
-            $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null,
-            false,
-        );
-        $dueDate = $loanTerms['due_date'];
+        $sharedDueDateInput = $request->input('due_date');
+        $sharedLoanDays = $request->filled('loan_duration_days') ? (int) $request->loan_duration_days : null;
         $results = [];
 
         foreach ($availableIds as $bookId) {
@@ -338,6 +336,16 @@ class CheckoutController extends Controller
                     continue;
                 }
             }
+
+            $loanTerms = LoanDueDate::resolveFromRequest(
+                $borrowedAt,
+                $fineSetting,
+                $sharedDueDateInput,
+                $sharedLoanDays,
+                false,
+                $book->section,
+            );
+            $dueDate = $loanTerms['due_date'];
 
             BookLog::create([
                 'book_id' => $book->id,

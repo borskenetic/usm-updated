@@ -216,4 +216,5 @@
     'editMode' => true,
 ])
 @include('books.partials.catalog_marc_pickers_script')
+@include('books.partials.catalog_sublocation_policy_script')
 @endsection

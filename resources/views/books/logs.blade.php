@@ -500,12 +500,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (employeeIdInput) employeeIdInput.value = '';
     }
 
+    let selectedCopyLoanDays = { student: null, employee: null };
+
     function getLoanDefaultDaysForSelectedPatron() {
         const hasEmployee = employeeIdInput && String(employeeIdInput.value || '').trim();
         if (hasEmployee) {
-            return window.LOAN_DEFAULT_DAYS_EMPLOYEE || 7;
+            return selectedCopyLoanDays.employee || window.LOAN_DEFAULT_DAYS_EMPLOYEE || 7;
         }
-        return window.LOAN_DEFAULT_DAYS_STUDENT || 7;
+        return selectedCopyLoanDays.student || window.LOAN_DEFAULT_DAYS_STUDENT || 7;
     }
 
     let loanTermsConfirmed = false;
@@ -629,10 +631,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('copy_identifier_input')?.addEventListener('input', function () {
         applyReservedCirculationRules(false);
+        selectedCopyLoanDays = { student: null, employee: null };
     });
 
     function applyCopySelectionFromLookup(b) {
         if (!b) return;
+        selectedCopyLoanDays = {
+            student: b.loan_duration_days_student || null,
+            employee: b.loan_duration_days_employee || null,
+        };
         applyReservedCirculationRules(!!b.reserved);
         const patronInput = document.getElementById('patron_name');
         if ((b.availability || '') === 'Borrowed') {
